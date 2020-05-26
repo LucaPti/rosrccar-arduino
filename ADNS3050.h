@@ -58,12 +58,12 @@ byte Read(byte reg_addr){
   digitalWrite(PIN_NCS, LOW);//begin communication
   // send address of the register, with MSBit = 0 to say it's reading
   SPI.transfer(reg_addr & 0x7f );
-  //delayMicroseconds(100);
+  delayMicroseconds(100);
   // read data
   byte data = SPI.transfer(0);
-  //delayMicroseconds(30);
+  delayMicroseconds(30);
   digitalWrite(PIN_NCS, HIGH);//end communication
-  //delayMicroseconds(30);
+  delayMicroseconds(30);
 
   return data;
 }
@@ -74,9 +74,9 @@ void Write(byte reg_addr, byte data){
   SPI.transfer(reg_addr | 0x80 );
   //send data
   SPI.transfer(data);
-  //delayMicroseconds(30);
+  delayMicroseconds(30);
   digitalWrite(PIN_NCS, HIGH);//end communication
-  //delayMicroseconds(30);
+  delayMicroseconds(30);
 }
 
 void startup(){
