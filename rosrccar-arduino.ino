@@ -1,6 +1,7 @@
 #define USE_RC_INPUT 0
 #define USE_RC_OUTPUT 0
-#define USE_OPTICAL_INPUT 1
+#define USE_OPTICAL_INPUT 0
+#define USE_ENCODER_INPUT 1
 
 #include <ros.h>
 //#include <ArduinoTcpHardware.h>
@@ -17,6 +18,11 @@
 #endif
 #if USE_RC_OUTPUT
 #include <Servo.h>
+#endif
+#if USE_ENCODER_INPUT
+#include "encoderreader.h"
+#define ENCODER_INPUT_PIN 2 //clashes with everything!
+#include <std_msgs/UInt16.h>
 #endif
 
 ros::NodeHandle node_handle;
@@ -61,14 +67,21 @@ arduino_messages::RawOpticalSensorData optsens_msg;
 ros::Publisher optsens_publisher("optical_sensor", &optsens_msg);
 #endif
 
+#if USE_ENCODER_INPUT
+EncoderReader encoder;
+void encoderinterrupt() 
+{
+  encoder++;
+}
+std_msgs::UInt16 encoder_msg;
+ros::Publisher encoder_publisher("encoder_sensor", &encoder_msg);
+#endif
+
 void setup() {
   node_handle.initNode();
   #if USE_RC_INPUT
   attachInterrupt(digitalPinToInterrupt(ACCELERATOR_INPUT_PIN), acceleratorinterrupt, CHANGE);
-  acceleratoroutput.attach(ACCELERATOR_OUTPUT_PIN);
-  
   attachInterrupt(digitalPinToInterrupt(STEERING_INPUT_PIN), steeringinterrupt, CHANGE);
-  steeringoutput.attach(STEERING_OUTPUT_PIN);
   
   node_handle.advertise(rc_publisher);
   #endif
@@ -79,7 +92,14 @@ void setup() {
   #endif
   
   #if USE_RC_OUTPUT
+  acceleratoroutput.attach(ACCELERATOR_OUTPUT_PIN);
+  steeringoutput.attach(STEERING_OUTPUT_PIN);
   node_handle.subscribe(roscomand_subscriber);
+  #endif
+
+  #if USE_ENCODER_INPUT
+  attachInterrupt(digitalPinToInterrupt(ENCODER_INPUT_PIN), encoderinterrupt, CHANGE);
+  node_handle.advertise(encoder_publisher);
   #endif
 }
 
@@ -99,6 +119,12 @@ void loop() {
     optsens_msg.delta_y = adns3050::getY();
   
     optsens_publisher.publish( &optsens_msg );
+    #endif
+
+    #if USE_ENCODER_INPUT
+    encoder_msg.data = encoder.totalticks();
+
+    encoder_publisher.publish( &encoder_msg );
     #endif
     
     node_handle.spinOnce();
