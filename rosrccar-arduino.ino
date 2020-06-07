@@ -3,9 +3,8 @@
 #define USE_OPTICAL_INPUT 0
 #define USE_ENCODER_INPUT 1
 
-#include <ros.h>
-//#include <ArduinoTcpHardware.h>
-#include <ArduinoHardware.h>
+#include "ros.h"
+#include "ArduinoHardware.h"
 #if USE_RC_INPUT
 #include <arduino_messages/RCControl.h>
 #include "rcreader.h"
@@ -78,6 +77,7 @@ ros::Publisher encoder_publisher("encoder_sensor", &encoder_msg);
 #endif
 
 void setup() {
+  node_handle.getHardware()->setBaud(256000);
   node_handle.initNode();
   #if USE_RC_INPUT
   attachInterrupt(digitalPinToInterrupt(ACCELERATOR_INPUT_PIN), acceleratorinterrupt, CHANGE);
@@ -128,5 +128,6 @@ void loop() {
     #endif
     
     node_handle.spinOnce();
+    time_last_loop_microseconds = time_current_loop_microseconds;
   }
 }
