@@ -1,4 +1,4 @@
-#define USE_RC_INPUT 0
+#define USE_RC_INPUT 1
 #define USE_RC_OUTPUT 0
 #define USE_OPTICAL_INPUT 0
 #define USE_ENCODER_INPUT 1
@@ -20,7 +20,7 @@
 #endif
 #if USE_ENCODER_INPUT
 #include "encoderreader.h"
-#define ENCODER_INPUT_PIN 2 //clashes with everything!
+#define ENCODER_INPUT_PIN 14 //does not work.
 #include <std_msgs/UInt16.h>
 #endif
 
@@ -98,7 +98,7 @@ void setup() {
   #endif
 
   #if USE_ENCODER_INPUT
-  attachInterrupt(digitalPinToInterrupt(ENCODER_INPUT_PIN), encoderinterrupt, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(ENCODER_INPUT_PIN), encoderinterrupt, RISING);
   node_handle.advertise(encoder_publisher);
   #endif
 }

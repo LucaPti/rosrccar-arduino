@@ -23,3 +23,4 @@ You can visualize your project in ROS using these commands in seperate terminal 
 * `rosrun rosserial_python serial_node.py /dev/ttyACM0` (possibly after modifying the access rights to your Arduino and sourcing setup.bash, replace ttyACM0 with correct device name).
 * `rostopic echo _whatevertopicyoulike_` (after sourcing setup.bash)
 * `rqt_plot optical_sensor/delta_x` (after sourcing setup.bash, choose any other signal you like)
+* `rostopic hz _whatevertopicyoulike_` gives the publication frequency.
