@@ -20,7 +20,7 @@
 #endif
 #if USE_ENCODER_INPUT
 #include "encoderreader.h"
-#define ENCODER_INPUT_PIN 14 //does not work.
+#define ENCODER_INPUT_PIN 14 //A0, uses pin change interrupt so here just for documentation
 #include <std_msgs/UInt16.h>
 #endif
 
@@ -68,9 +68,13 @@ ros::Publisher optsens_publisher("optical_sensor", &optsens_msg);
 
 #if USE_ENCODER_INPUT
 EncoderReader encoder;
-void encoderinterrupt() 
+//unsigned int totalticks{0};
+ISR(PCINT1_vect)
 {
-  encoder++;
+  if(~digitalRead(A0)) // only trigger on falling edge
+  {
+    encoder++;
+  }
 }
 std_msgs::UInt16 encoder_msg;
 ros::Publisher encoder_publisher("encoder_sensor", &encoder_msg);
@@ -98,7 +102,10 @@ void setup() {
   #endif
 
   #if USE_ENCODER_INPUT
-  attachInterrupt(digitalPinToInterrupt(ENCODER_INPUT_PIN), encoderinterrupt, RISING);
+  cli();
+  PCICR |= 0b00000010; // Enables Port C (PCIE1) Pin Change Interrupts
+  PCMSK1 |= 0b00000001; // PCINT11 bzw. A3 aktiv, Pins A5-A0
+  sei();
   node_handle.advertise(encoder_publisher);
   #endif
 }
@@ -123,6 +130,7 @@ void loop() {
 
     #if USE_ENCODER_INPUT
     encoder_msg.data = encoder.totalticks();
+    //encoder_msg.data = totalticks;
 
     encoder_publisher.publish( &encoder_msg );
     #endif
