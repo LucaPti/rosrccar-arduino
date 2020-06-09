@@ -38,12 +38,12 @@ boolean RCReader::signalisvalid(void) {
   // Checks as in https://create.arduino.cc/projecthub/kelvineyeone/read-pwm-decode-rc-receiver-input-and-apply-fail-safe-6b90eb
   failsafe_engage = (pwm_interval>100000)||(pwm_interval<3000);
   failsafe_engage = failsafe_engage||((pulse_interval<500)||(pulse_interval>2500));
-  return failsafe_engage;
+  return !failsafe_engage;
 }
 
 float RCReader::failsafeinput(void) {
   // Validates current readings: PWM interval, "HIGH" interval, and last interrupt
-  if(this->signalisvalid()){
+  if(!(this->signalisvalid())){
     return 0;
   }
   else{

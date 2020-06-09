@@ -24,3 +24,6 @@ You can visualize your project in ROS using these commands in seperate terminal 
 * `rostopic echo _whatevertopicyoulike_` (after sourcing setup.bash)
 * `rqt_plot optical_sensor/delta_x` (after sourcing setup.bash, choose any other signal you like)
 * `rostopic hz _whatevertopicyoulike_` gives the publication frequency.
+
+## Drive the car via computer
+You can pipe the commands from the RC controller back to the arduino using `rosrun topic_tools relay rc_input rc_output`.

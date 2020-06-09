@@ -1,5 +1,5 @@
 #define USE_RC_INPUT 1
-#define USE_RC_OUTPUT 0
+#define USE_RC_OUTPUT 1
 #define USE_OPTICAL_INPUT 0
 #define USE_ENCODER_INPUT 1
 
@@ -53,8 +53,8 @@ Servo steeringoutput;
 
 void rosinterrupt(const arduino_messages::RCControl ros_comand) {
   if(ros_comand.valid) {
-    acceleratoroutput.write(ros_comand.accelerator*90-90);
-    steeringoutput.write(ros_comand.accelerator*90-90);
+    acceleratoroutput.write(ros_comand.accelerator*90+90);
+    steeringoutput.write(ros_comand.steering*90+90);
   }
 }
 
@@ -68,7 +68,6 @@ ros::Publisher optsens_publisher("optical_sensor", &optsens_msg);
 
 #if USE_ENCODER_INPUT
 EncoderReader encoder;
-//unsigned int totalticks{0};
 ISR(PCINT1_vect)
 {
   if(~digitalRead(A0)) // only trigger on falling edge
@@ -130,10 +129,10 @@ void loop() {
 
     #if USE_ENCODER_INPUT
     encoder_msg.data = encoder.totalticks();
-    //encoder_msg.data = totalticks;
 
     encoder_publisher.publish( &encoder_msg );
     #endif
+    // RC output handled via interrupt
     
     node_handle.spinOnce();
     time_last_loop_microseconds = time_current_loop_microseconds;
