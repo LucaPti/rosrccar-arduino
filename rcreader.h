@@ -1,11 +1,18 @@
 #ifndef RCREADER
 #define RCREADER
 
+// Calibration
+#define MAX_NORM_VAL 1980  // Reference 2200
+#define MIN_NORM_VAL 1156  // Reference 700
+#define MAX_LIMIT_VAL 2200 // Reference 2500, measured 2116
+#define MIN_LIMIT_VAL 1000 // Reference 500, measured 1032
+#define ZERO_NORM_VAL 1536 // Reference 1500, measured 1536
+
 #include "pwmreader.h"
 
 class RCReader : public PWMReader {
   public:
-    RCReader(int attachTo): PWMReader(attachTo),minlevel(700),zerolevel(1500),maxlevel(2300){}
+    RCReader(int attachTo): PWMReader(attachTo),minlevel(MIN_NORM_VAL),zerolevel(ZERO_NORM_VAL),maxlevel(MAX_NORM_VAL){}
     void setlevels(int minpulsetime,int zeropulsetime,int maxpulsetime);
     float normalizedinput();
     float failsafeinput();
@@ -36,8 +43,8 @@ float RCReader::normalizedinput(void) {
 boolean RCReader::signalisvalid(void) {
   boolean failsafe_engage;
   // Checks as in https://create.arduino.cc/projecthub/kelvineyeone/read-pwm-decode-rc-receiver-input-and-apply-fail-safe-6b90eb
-  failsafe_engage = (pwm_interval>100000)||(pwm_interval<3000);
-  failsafe_engage = failsafe_engage||((pulse_interval<500)||(pulse_interval>2500));
+  failsafe_engage = (pwm_interval>100000)||(pwm_interval<3000)||((micros()-phase_start_time)>100000);
+  failsafe_engage = failsafe_engage||((pulse_interval<MIN_LIMIT_VAL)||(pulse_interval>MAX_LIMIT_VAL));
   return !failsafe_engage;
 }
 
