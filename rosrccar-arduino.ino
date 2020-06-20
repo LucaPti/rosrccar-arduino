@@ -1,21 +1,22 @@
 #define USE_RC_INPUT 1
 #define USE_RC_OUTPUT 1
-#define USE_OPTICAL_INPUT 0
+#define USE_OPTICAL_INPUT 1
 #define USE_ENCODER_INPUT 1
 
 #include "ros.h"
 #include "ArduinoHardware.h"
 #if USE_RC_INPUT
-#include <arduino_messages/RCControl.h>
+#include <rosrccar_messages/RCControl.h>
 #include "rcreader.h"
 #define ACCELERATOR_INPUT_PIN 2
 #define STEERING_INPUT_PIN    3
 #endif
 #if USE_OPTICAL_INPUT
-#include <arduino_messages/RawOpticalSensorData.h>
+#include <rosrccar_messages/RawOpticalSensorData.h>
 #include "ADNS3050.h"
 #endif
 #if USE_RC_OUTPUT
+#include <rosrccar_messages/RCControl.h>
 #include <Servo.h>
 #endif
 #if USE_ENCODER_INPUT
@@ -40,7 +41,7 @@ void steeringinterrupt() {
   steeringinput.processinterrupt();
 }
 
-arduino_messages::RCControl rc_msg;
+rosrccar_messages::RCControl rc_msg;
 
 ros::Publisher rc_publisher("rc_input", &rc_msg);
 #endif
@@ -51,18 +52,18 @@ ros::Publisher rc_publisher("rc_input", &rc_msg);
 Servo acceleratoroutput;
 Servo steeringoutput;
 
-void rosinterrupt(const arduino_messages::RCControl ros_comand) {
+void rosinterrupt(const rosrccar_messages::RCControl ros_comand) {
   if(ros_comand.valid) {
-    acceleratoroutput.write(ros_comand.accelerator*90+90);
-    steeringoutput.write(ros_comand.steering*90+90);
+    acceleratoroutput.write(ros_comand.accelerator*90*0.5+90); // Calibration: Car reacts only to about 50% of command range
+    steeringoutput.write(ros_comand.steering*90*0.5+90);
   }
 }
 
-ros::Subscriber<arduino_messages::RCControl> roscomand_subscriber("rc_output", &rosinterrupt);
+ros::Subscriber<rosrccar_messages::RCControl> roscomand_subscriber("rc_output", &rosinterrupt);
 #endif
 
 #if USE_OPTICAL_INPUT
-arduino_messages::RawOpticalSensorData optsens_msg;
+rosrccar_messages::RawOpticalSensorData optsens_msg;
 ros::Publisher optsens_publisher("optical_sensor", &optsens_msg);
 #endif
 

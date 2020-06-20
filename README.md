@@ -13,7 +13,10 @@ Via serial connection I provide ROS topics for RC controls, optical sensor and c
 ## Preparations
 In order to have the necessary libraries to compile the code, you need to generate them from ROS, using the project from my other repository. I found [this tutorial](https://maker.pro/arduino/tutorial/how-to-use-arduino-with-robot-operating-system-ros) to be instructive except for generating the library, which is easy: 
 * `cd catkin_ws`
+* `catkin_make`
+* `catkin_make install` (to avoid missing packages, restart Arduino IDE, from [this page](https://wiki.metropolia.fi/pages/viewpage.action?pageId=150997619))
 * `source ./devel/setup.bash`
+* `rm -rf ~/Arduino/libraries/ros_lib` (delete old library folder if existing)
 * `rosrun rosserial_arduino make_libraries.py ~/Arduino/libraries`
 and then add them to your Arduino IDE. Build and flash your project like normal. If you cannot access your Arduino you might have to modify the access rights with this command: `sudo chmod a+rw /dev/ttyACM0`.
 
