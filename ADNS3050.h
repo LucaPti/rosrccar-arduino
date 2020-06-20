@@ -7,7 +7,7 @@
  #define PIN_SCLK   SCK
  #define PIN_MISO   MISO
  #define PIN_MOSI   MOSI
- #define PIN_NCS    8
+ #define PIN_NCS    10
 
 // Define all the registers
  #define PROD_ID                          0x00
