@@ -122,9 +122,15 @@ void loop() {
     #endif
   
     #if USE_OPTICAL_INPUT
-    optsens_msg.delta_x = adns3050::getX();
-    optsens_msg.delta_y = adns3050::getY();
-  
+    optsens_msg.valid = adns3050::datavalid();
+    if(optsens_msg.valid){
+      optsens_msg.delta_x = adns3050::getX();
+      optsens_msg.delta_y = adns3050::getY();
+    }
+    else {
+      optsens_msg.delta_x = 0;
+      optsens_msg.delta_y = adns3050::measurementquality();
+    }
     optsens_publisher.publish( &optsens_msg );
     #endif
 

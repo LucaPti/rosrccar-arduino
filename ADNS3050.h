@@ -58,12 +58,12 @@ byte Read(byte reg_addr){
   digitalWrite(PIN_NCS, LOW);//begin communication
   // send address of the register, with MSBit = 0 to say it's reading
   SPI.transfer(reg_addr & 0x7f );
-  delayMicroseconds(100);
+  delayMicroseconds(5);
   // read data
   byte data = SPI.transfer(0);
-  delayMicroseconds(30);
+  delayMicroseconds(1);
   digitalWrite(PIN_NCS, HIGH);//end communication
-  delayMicroseconds(30);
+  delayMicroseconds(1);
 
   return data;
 }
@@ -120,6 +120,18 @@ int getY(){//returns the Y acceleration value
   byte y = 0;
   y= Read(0x04);
   return(convTwosComp(y));
+}
+
+bool datavalid(){
+  byte s = 0;
+  s = Read(MOTION_ST);
+  return((s&(1<<7))!=0);
+}
+
+unsigned int measurementquality(){
+  byte m = 0;
+  m = Read(SQUAL);
+  return (static_cast<unsigned int>(m)<<1);
 }
 
 }
