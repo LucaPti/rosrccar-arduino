@@ -19,11 +19,12 @@ In order to have the necessary libraries to compile the code, you need to genera
 * `rm -rf ~/Arduino/libraries/ros_lib` (delete old library folder if existing)
 * `rosrun rosserial_arduino make_libraries.py ~/Arduino/libraries`
 and then add them to your Arduino IDE. Build and flash your project like normal. If you cannot access your Arduino you might have to modify the access rights with this command: `sudo chmod a+rw /dev/ttyACM0`.
+Make sure you are using an up-to-date Arduino IDE (that can handle the project name) that is appropriate for your system architecture (Raspberry Pi is ARM).
 
 ## See something in ROS
 You can visualize your project in ROS using these commands in seperate terminal windows
 * `roscore`
-* `rosrun rosserial_python serial_node.py /dev/ttyACM0` (possibly after modifying the access rights to your Arduino and sourcing setup.bash, replace ttyACM0 with correct device name).
+* `rosrun rosserial_python serial_node.py /dev/ttyACM0 _baud:=256000` (possibly after modifying the access rights to your Arduino and sourcing setup.bash, replace ttyACM0 with correct device name).
 * `rostopic echo _whatevertopicyoulike_` (after sourcing setup.bash)
 * `rqt_plot optical_sensor/delta_x` (after sourcing setup.bash, choose any other signal you like)
 * `rostopic hz _whatevertopicyoulike_` gives the publication frequency.

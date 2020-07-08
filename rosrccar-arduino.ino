@@ -28,7 +28,7 @@
 ros::NodeHandle node_handle;
 unsigned long time_last_loop_microseconds(0);
 unsigned long time_current_loop_microseconds(0);
-unsigned long desired_sample_time_microseconds(10000);
+unsigned long desired_sample_time_microseconds(20000);
 
 #if USE_RC_INPUT
 RCReader acceleratorinput(ACCELERATOR_INPUT_PIN);
