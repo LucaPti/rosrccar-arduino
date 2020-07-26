@@ -18,6 +18,7 @@ In order to have the necessary libraries to compile the code, you need to genera
 * `source ./devel/setup.bash`
 * `rm -rf ~/Arduino/libraries/ros_lib` (delete old library folder if existing)
 * `rosrun rosserial_arduino make_libraries.py ~/Arduino/libraries`
+* (recommended:) edit your ros_lib/ros.h such that the defaults for ATmega328P are less memory consuming, e. g. 6, 6, 150, 150.
 and then add them to your Arduino IDE. Build and flash your project like normal. If you cannot access your Arduino you might have to modify the access rights with this command: `sudo chmod a+rw /dev/ttyACM0`.
 Make sure you are using an up-to-date Arduino IDE (that can handle the project name) that is appropriate for your system architecture (Raspberry Pi is ARM).
 

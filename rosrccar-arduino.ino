@@ -1,12 +1,19 @@
 // ############### Configuration
-#define DEBUG_MODE            1 // no ros communication just some debug prints via serial if set to 1
+#define DEBUG_MODE            0 // no ros communication just some debug prints via serial if set to 1
 #define USE_RC_INPUT          1
+#define PUBLISH_RC_INPUT      0
 #define USE_RC_OUTPUT         1
-#define USE_OPTICAL_INPUT     1
+#define USE_OPTICAL_INPUT     0
+#define PUBLISH_OPTICAL_INPUT 0
 #define USE_ENCODER_INPUT     1
+#define PUBLISH_ENCODER_INPUT 0
 #define RELAY_RC_COMMAND      1
-#define USE_BATTERY_VOLTAGE   1
+#define USE_BATTERY_VOLTAGE   0
+#define PUBLISH_BATTERY_VOLTAGE 0
 #define USE_GYRO              1
+#define PUBLISH_GYRO_INPUT    0
+#define PUBLISH_VEHICLE_STATE 1
+#define PUBLISH_VEHICLE_HEALTH 0
 
 // ############### Pinout
 #define ACCELERATOR_INPUT_PIN 2 // RC receiver channel 2
@@ -27,6 +34,12 @@
 // ############### Includes
 #include "ros.h"
 #include "ArduinoHardware.h"
+#if PUBLISH_VEHICLE_STATE
+#include <rosrccar_messages/VehicleState.h>
+#endif
+#if PUBLISH_VEHICLE_HEALTH
+#include <rosrccar_messages/VehicleHealth.h>
+#endif
 #if USE_RC_INPUT
 #include <rosrccar_messages/RCControl.h>
 #include "rcreader.h"
@@ -43,67 +56,104 @@
 #include "encoderreader.h"
 #include <std_msgs/UInt16.h>
 #endif
+#if USE_BATTERY_VOLTAGE
+#include <std_msgs/Float32.h>
+#endif
 #if USE_GYRO
 #include "I2Cdev.h"
 #include "MPU6050_6Axis_MotionApps_V6_12.h"
 #include "Wire.h"
+#include <geometry_msgs/Twist.h>
 #endif
 
 #if !DEBUG_MODE // Normal "production mode" loop
 // ############### Global variables & functions
 ros::NodeHandle node_handle;
+#if PUBLISH_VEHICLE_STATE
+  rosrccar_messages::VehicleState vehiclestate_msg;
+  ros::Publisher vehiclestate_publisher("vehicle_state", &vehiclestate_msg);
+#endif
+#if PUBLISH_VEHICLE_HEALTH
+  rosrccar_messages::VehicleHealth vehiclehealth_msg;
+  ros::Publisher vehiclehealth_publisher("vehicle_health", &vehiclehealth_msg);
+#endif
 unsigned long time_last_loop_microseconds(0);
 unsigned long time_current_loop_microseconds(0);
 unsigned long desired_sample_time_microseconds(20000);
 
 #if USE_RC_INPUT
-RCReader acceleratorinput(ACCELERATOR_INPUT_PIN);
-RCReader steeringinput(STEERING_INPUT_PIN);
-
-void acceleratorinterrupt() {
-  acceleratorinput.processinterrupt();
-}
-void steeringinterrupt() {
-  steeringinput.processinterrupt();
-}
-
-rosrccar_messages::RCControl rc_msg;
-
-ros::Publisher rc_publisher("rc_input", &rc_msg);
+  RCReader acceleratorinput(ACCELERATOR_INPUT_PIN);
+  RCReader steeringinput(STEERING_INPUT_PIN);
+  
+  void acceleratorinterrupt() {
+    acceleratorinput.processinterrupt();
+  }
+  void steeringinterrupt() {
+    steeringinput.processinterrupt();
+  }
+  rosrccar_messages::RCControl rc_msg;
+  #if PUBLISH_RC_INPUT
+    ros::Publisher rc_publisher("rc_input", &rc_msg);
+  #endif
 #endif
 
 #if USE_RC_OUTPUT
-Servo acceleratoroutput;
-Servo steeringoutput;
+  Servo acceleratoroutput;
+  Servo steeringoutput;
 
-void rosinterrupt(const rosrccar_messages::RCControl ros_comand) {
-  if(ros_comand.valid) {
-#if !(RELAY_RC_COMMAND)
-    acceleratoroutput.write(ros_comand.accelerator*90*0.5+90); // Calibration: Car reacts only to about 50% of command range
-    steeringoutput.write(ros_comand.steering*90*0.5+90);
-#endif
+  void rosinterrupt(const rosrccar_messages::RCControl ros_comand) {
+    if(ros_comand.valid) {
+    #if !(RELAY_RC_COMMAND)
+      acceleratoroutput.write(ros_comand.accelerator*90*0.5+90); // Calibration: Car reacts only to about 50% of command range
+      steeringoutput.write(ros_comand.steering*90*0.5+90);
+    #endif
+    }
   }
-}
 
-ros::Subscriber<rosrccar_messages::RCControl> roscomand_subscriber("rc_output", &rosinterrupt);
+  ros::Subscriber<rosrccar_messages::RCControl> roscomand_subscriber("rc_output", &rosinterrupt);
 #endif
 
-#if USE_OPTICAL_INPUT
-rosrccar_messages::RawOpticalSensorData optsens_msg;
-ros::Publisher optsens_publisher("optical_sensor", &optsens_msg);
+#if USE_OPTICAL_INPUT&&PUBLISH_OPTICAL_INPUT
+  rosrccar_messages::RawOpticalSensorData optsens_msg;
+  ros::Publisher optsens_publisher("optical_sensor", &optsens_msg);
 #endif
 
 #if USE_ENCODER_INPUT
-EncoderReader encoder;
-ISR(PCINT1_vect)
-{
-  if(~digitalRead(A0)) // only trigger on falling edge
+  EncoderReader encoder;
+  ISR(PCINT1_vect)
   {
-    encoder++;
+    if(~digitalRead(A0)) // only trigger on falling edge
+    {
+      encoder++;
+    }
   }
-}
-std_msgs::UInt16 encoder_msg;
-ros::Publisher encoder_publisher("encoder_sensor", &encoder_msg);
+  #if PUBLISH_ENCODER_INPUT
+    std_msgs::UInt16 encoder_msg;
+    ros::Publisher encoder_publisher("encoder_sensor", &encoder_msg);
+  #endif
+#endif
+
+#if USE_BATTERY_VOLTAGE&&PUBLISH_BATTERY_VOLTAGE
+  std_msgs::Float32 battery_msg;
+  ros::Publisher battery_publisher("battery_voltage", &battery_msg);
+#endif
+
+#if USE_GYRO
+  MPU6050 mpu;
+  uint8_t devStatus;      // return status after each device operation (0 = success, !0 = error)
+  uint16_t fifoCount;     // count of all bytes currently in FIFO
+  uint8_t fifoBuffer[64]; // FIFO storage buffer
+  
+  // orientation/motion vars
+  Quaternion q;           // [w, x, y, z]         quaternion container
+  VectorInt16 aa;         // [x, y, z]            accel sensor measurements
+  VectorInt16 aaReal;     // [x, y, z]            gravity-free accel sensor measurements
+  VectorFloat gravity;    // [x, y, z]            gravity vector
+  float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
+  #if PUBLISH_GYRO_INPUT
+    geometry_msgs::Twist gyro_msg;
+    ros::Publisher gyro_publisher("imu_sensor", &gyro_msg);
+  #endif
 #endif
 
 // ############### Setup
@@ -111,29 +161,68 @@ void setup() {
   node_handle.getHardware()->setBaud(256000);
   node_handle.initNode();
   #if USE_RC_INPUT
-  attachInterrupt(digitalPinToInterrupt(ACCELERATOR_INPUT_PIN), acceleratorinterrupt, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(STEERING_INPUT_PIN), steeringinterrupt, CHANGE);
-  
-  node_handle.advertise(rc_publisher);
+    attachInterrupt(digitalPinToInterrupt(ACCELERATOR_INPUT_PIN), acceleratorinterrupt, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(STEERING_INPUT_PIN), steeringinterrupt, CHANGE);
+    #if PUBLISH_RC_INPUT
+      node_handle.advertise(rc_publisher);
+    #endif
   #endif
   
   #if USE_OPTICAL_INPUT
-  adns3050::startup();
-  node_handle.advertise(optsens_publisher);
+    adns3050::startup();
+    #if PUBLISH_OPTICAL_INPUT
+      node_handle.advertise(optsens_publisher);
+    #endif
   #endif
   
   #if USE_RC_OUTPUT
-  acceleratoroutput.attach(ACCELERATOR_OUTPUT_PIN);
-  steeringoutput.attach(STEERING_OUTPUT_PIN);
-  node_handle.subscribe(roscomand_subscriber);
+    acceleratoroutput.attach(ACCELERATOR_OUTPUT_PIN);
+    steeringoutput.attach(STEERING_OUTPUT_PIN);
+    node_handle.subscribe(roscomand_subscriber);
   #endif
 
   #if USE_ENCODER_INPUT
-  cli();
-  PCICR |= 0b00000010; // Enables Port C (PCIE1) Pin Change Interrupts
-  PCMSK1 |= 0b00000001; // PCINT11 bzw. A3 aktiv, Pins A5-A0
-  sei();
-  node_handle.advertise(encoder_publisher);
+    cli();
+    PCICR |= 0b00000010; // Enables Port C (PCIE1) Pin Change Interrupts
+    PCMSK1 |= 0b00000001; // PCINT11 bzw. A3 aktiv, Pins A5-A0
+    sei();
+    #if PUBLISH_ENCODER_INPUT
+      node_handle.advertise(encoder_publisher);
+    #endif
+  #endif
+
+  #if USE_BATTERY_VOLTAGE&&PUBLISH_BATTERY_VOLTAGE
+    node_handle.advertise(battery_publisher);
+  #endif
+
+  #if USE_GYRO
+    Wire.begin();
+    Wire.setClock(400000); // 400kHz I2C clock. Comment this line if having compilation difficulties
+    // initialize device
+    mpu.initialize();
+  
+    // load and configure the DMP
+    devStatus = mpu.dmpInitialize(); // hangs if there is no power on MPU6050 (or not connected)
+  
+    // supply your own gyro offsets here, scaled for min sensitivity
+    mpu.setXGyroOffset(39);//51
+    mpu.setYGyroOffset(-1);//8
+    mpu.setZGyroOffset(57);//21
+    mpu.setXAccelOffset(-1774);//1150
+    mpu.setYAccelOffset(-430);//-50
+    mpu.setZAccelOffset(968);//1060
+    mpu.setDMPEnabled(true);
+    #if PUBLISH_GYRO_INPUT
+      node_handle.advertise(gyro_publisher);
+    #endif
+  #endif
+
+  #if PUBLISH_VEHICLE_STATE
+    node_handle.advertise(vehiclestate_publisher);
+  #endif
+
+  #if PUBLISH_VEHICLE_HEALTH
+    node_handle.advertise(vehiclehealth_publisher);
   #endif
 }
 
@@ -142,36 +231,97 @@ void loop() {
   time_current_loop_microseconds = micros();
   if(time_current_loop_microseconds >= time_last_loop_microseconds+desired_sample_time_microseconds) {
     #if USE_RC_INPUT
-    rc_msg.accelerator = acceleratorinput.failsafeinput();
-    rc_msg.steering = steeringinput.failsafeinput();
-    rc_msg.valid = acceleratorinput.signalisvalid()&&steeringinput.signalisvalid();
-  
-    rc_publisher.publish( &rc_msg );
+      rc_msg.accelerator = acceleratorinput.failsafeinput();
+      rc_msg.steering = steeringinput.failsafeinput();
+      rc_msg.valid = acceleratorinput.signalisvalid()&&steeringinput.signalisvalid();
+      #if PUBLISH_RC_INPUT
+        rc_publisher.publish( &rc_msg );
+      #endif
     #endif
   
-    #if USE_OPTICAL_INPUT
-    optsens_msg.valid = adns3050::datavalid();
-    if(optsens_msg.valid){
-      optsens_msg.delta_x = adns3050::getX();
-      optsens_msg.delta_y = adns3050::getY();
-    }
-    else {
-      optsens_msg.delta_x = 0;
-      optsens_msg.delta_y = adns3050::measurementquality();
-    }
-    optsens_publisher.publish( &optsens_msg );
+    #if USE_OPTICAL_INPUT&&PUBLISH_OPTICAL_INPUT
+      optsens_msg.valid = adns3050::datavalid();
+      if(optsens_msg.valid){
+        optsens_msg.delta_x = adns3050::getX();
+        optsens_msg.delta_y = adns3050::getY();
+      }
+      else {
+        optsens_msg.delta_x = 0;
+        optsens_msg.delta_y = adns3050::measurementquality();
+      }
+      optsens_publisher.publish( &optsens_msg );
     #endif
 
     #if USE_ENCODER_INPUT
-    encoder_msg.data = encoder.totalticks();
-
-    encoder_publisher.publish( &encoder_msg );
+      #if PUBLISH_VEHICLE_STATE
+        vehiclestate_msg.enginespeed = encoder.deltaticks()/(4*2*3.141592);
+      #endif
+      #if PUBLISH_ENCODER_INPUT
+        encoder_msg.data = encoder.totalticks();
+        encoder_publisher.publish( &encoder_msg );
+      #endif
     #endif
+    
     #if RELAY_RC_COMMAND
-    acceleratoroutput.write(rc_msg.accelerator*90*0.5+90); // Calibration: Car reacts only to about 50% of command range
-    steeringoutput.write(rc_msg.steering*90*0.5+90);
+      acceleratoroutput.write(rc_msg.accelerator*90*0.5+90); // Calibration: Car reacts only to about 50% of command range
+      steeringoutput.write(rc_msg.steering*90*0.5+90);
     #else
-    // RC output handled via interrupt
+      // RC output handled via interrupt
+    #endif
+
+    #if USE_BATTERY_VOLTAGE
+      #if PUBLISH_BATTERY_VOLTAGE
+        battery_msg.data = analogRead(BATTERY_VOLTAGE);
+        battery_publisher.publish( &battery_msg );
+      #endif
+      #if PUBLISH_VEHICLE_HEALTH
+        vehiclehealth_msg.battery_voltage = analogRead(BATTERY_VOLTAGE);
+      #endif
+    #endif
+
+    #if USE_GYRO
+      mpu.dmpGetCurrentFIFOPacket(fifoBuffer);
+      mpu.dmpGetQuaternion(&q, fifoBuffer);
+      mpu.dmpGetGravity(&gravity, &q);
+      mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
+      mpu.dmpGetAccel(&aa, fifoBuffer);
+      mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
+      #if PUBLISH_GYRO_INPUT
+        gyro_msg.linear.x = aaReal.x;
+        gyro_msg.linear.y = aaReal.y;
+        gyro_msg.linear.z = aaReal.z;
+        gyro_msg.angular.z = ypr[0];
+        gyro_msg.angular.x = ypr[1];
+        gyro_msg.angular.y = ypr[2];
+        gyro_publisher.publish( &gyro_msg );
+      #endif
+      #if PUBLISH_VEHICLE_STATE
+        vehiclestate_msg.yaw = ypr[0];
+        vehiclestate_msg.acc_x = aaReal.x;
+        vehiclestate_msg.acc_y = aaReal.y;
+      #endif
+    #endif
+
+    #if PUBLISH_VEHICLE_STATE
+      vehiclestate_publisher.publish( &vehiclestate_msg );
+    #endif
+
+    #if PUBLISH_VEHICLE_HEALTH
+      vehiclehealth_msg.pass_on_rc = RELAY_RC_COMMAND;
+      //vehiclehealth_msg.speedlimit
+      vehiclehealth_msg.limit_speed = false;
+      //vehiclehealth_msg.rpmlimit
+      vehiclehealth_msg.limit_rpm = false;
+      #if USE_RC_INPUT
+        vehiclehealth_msg.rc_available = acceleratorinput.signalisvalid()&&steeringinput.signalisvalid();
+      #endif
+      #if USE_OPTICAL_INPUT
+        vehiclehealth_msg.optical_available
+      #endif
+      #if USE_GYRO
+        vehiclehealth_msg.imu_available = true;
+      #endif
+      vehiclehealth_publisher.publish( &vehiclehealth_msg );
     #endif
     
     node_handle.spinOnce();
@@ -211,27 +361,27 @@ ISR(PCINT1_vect)
 #if USE_GYRO
 MPU6050 mpu;
 // MPU control/status vars
-bool dmpReady = false;  // set true if DMP init was successful
-uint8_t mpuIntStatus;   // holds actual interrupt status byte from MPU
+//bool dmpReady = false;  // set true if DMP init was successful
+//uint8_t mpuIntStatus;   // holds actual interrupt status byte from MPU
 uint8_t devStatus;      // return status after each device operation (0 = success, !0 = error)
-uint16_t packetSize;    // expected DMP packet size (default is 42 bytes)
+//uint16_t packetSize;    // expected DMP packet size (default is 42 bytes)
 uint16_t fifoCount;     // count of all bytes currently in FIFO
 uint8_t fifoBuffer[64]; // FIFO storage buffer
 
 // orientation/motion vars
 Quaternion q;           // [w, x, y, z]         quaternion container
 VectorInt16 aa;         // [x, y, z]            accel sensor measurements
-VectorInt16 gy;         // [x, y, z]            gyro sensor measurements
+//VectorInt16 gy;         // [x, y, z]            gyro sensor measurements
 VectorInt16 aaReal;     // [x, y, z]            gravity-free accel sensor measurements
-VectorInt16 aaWorld;    // [x, y, z]            world-frame accel sensor measurements
+//VectorInt16 aaWorld;    // [x, y, z]            world-frame accel sensor measurements
 VectorFloat gravity;    // [x, y, z]            gravity vector
-float euler[3];         // [psi, theta, phi]    Euler angle container
+//float euler[3];         // [psi, theta, phi]    Euler angle container
 float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
 
-volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
-void dmpDataReady() {
-  mpuInterrupt = true;
-}
+//volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
+//void dmpDataReady() {
+//  mpuInterrupt = true;
+//}
 #endif
 
 
@@ -305,14 +455,14 @@ void setup() {
     //Serial.print(digitalPinToInterrupt(INTERRUPT_PIN));
     //Serial.println(F(")..."));
     //attachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN), dmpDataReady, RISING);
-    mpuIntStatus = mpu.getIntStatus();
+    //mpuIntStatus = mpu.getIntStatus();
 
     // set our DMP Ready flag so the main loop() function knows it's okay to use it
     // Serial.println(F("DMP ready! Waiting for first interrupt..."));
     // dmpReady = true;
 
     // get expected DMP packet size for later comparison
-    packetSize = mpu.dmpGetFIFOPacketSize();
+    //packetSize = mpu.dmpGetFIFOPacketSize();
   } else {
     // ERROR!
     // 1 = initial memory load failed
