@@ -5,7 +5,7 @@ Arduino part of my project for an RC car that passes all signals to a Raspberry 
 The Arduino, currently an Arduino Uno is intended as a real-time capable hardware interface for ROS and should run some configurable controllers.
 For now, I intend to provide the hardware interface:
 * Read throttle and steering from an RC receiver.
-* Read data from an optical [ADNS3050 sensor](https://github.com/Tom101222/Adns-3050-Optical-Sensor).
+* Read data from an optical [ADNS3050 sensor](https://github.com/Tom101222/Adns-3050-Optical-Sensor)([manual](https://www.mouser.de/datasheet/2/678/avagotechnologies_ADNS-3050-1217285.pdf)).
 * Output PWM signals for throttle and steering.
 In the future I want to have some routing capability that can either pipe through the RC commands or execute a simple controller in real time.
 Via serial connection I provide ROS topics for RC controls, optical sensor and car controls.
