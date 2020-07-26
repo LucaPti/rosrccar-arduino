@@ -6,7 +6,7 @@
 #define USE_OPTICAL_INPUT     0
 #define PUBLISH_OPTICAL_INPUT 0
 #define USE_ENCODER_INPUT     1
-#define PUBLISH_ENCODER_INPUT 0
+#define PUBLISH_ENCODER_INPUT 1
 #define RELAY_RC_COMMAND      1
 #define USE_BATTERY_VOLTAGE   0
 #define PUBLISH_BATTERY_VOLTAGE 0
@@ -35,6 +35,7 @@
 #include "ros.h"
 #include "ArduinoHardware.h"
 #if PUBLISH_VEHICLE_STATE
+#include "vehiclestateestimator.h"
 #include <rosrccar_messages/VehicleState.h>
 #endif
 #if PUBLISH_VEHICLE_HEALTH
@@ -70,8 +71,9 @@
 // ############### Global variables & functions
 ros::NodeHandle node_handle;
 #if PUBLISH_VEHICLE_STATE
-  rosrccar_messages::VehicleState vehiclestate_msg;
-  ros::Publisher vehiclestate_publisher("vehicle_state", &vehiclestate_msg);
+  // rosrccar_messages::VehicleState vehiclestate_msg;
+  VehicleStateEstimator estimator;
+  ros::Publisher vehiclestate_publisher("vehicle_state", &estimator.state);
 #endif
 #if PUBLISH_VEHICLE_HEALTH
   rosrccar_messages::VehicleHealth vehiclehealth_msg;
@@ -254,7 +256,7 @@ void loop() {
 
     #if USE_ENCODER_INPUT
       #if PUBLISH_VEHICLE_STATE
-        vehiclestate_msg.enginespeed = encoder.deltaticks()/(4*2*3.141592);
+        //vehiclestate_msg.enginespeed = encoder.deltaticks()/(4*2*3.141592);
       #endif
       #if PUBLISH_ENCODER_INPUT
         encoder_msg.data = encoder.totalticks();
@@ -296,14 +298,15 @@ void loop() {
         gyro_publisher.publish( &gyro_msg );
       #endif
       #if PUBLISH_VEHICLE_STATE
-        vehiclestate_msg.yaw = ypr[0];
-        vehiclestate_msg.acc_x = aaReal.x;
-        vehiclestate_msg.acc_y = aaReal.y;
+        //vehiclestate_msg.yaw = ypr[0];
+        //vehiclestate_msg.acc_x = aaReal.x;
+        //vehiclestate_msg.acc_y = aaReal.y;
       #endif
     #endif
 
     #if PUBLISH_VEHICLE_STATE
-      vehiclestate_publisher.publish( &vehiclestate_msg );
+      estimator.update(aaReal.x, aaReal.y, ypr[0], encoder.deltaticks(), 20000, steeringinput.failsafeinput(), acceleratorinput.failsafeinput());
+      vehiclestate_publisher.publish( &estimator.state);
     #endif
 
     #if PUBLISH_VEHICLE_HEALTH
