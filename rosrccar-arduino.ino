@@ -1,14 +1,14 @@
 // ############### Configuration
-#define DEBUG_MODE            0 // no ros communication just some debug prints via serial if set to 1
+#define DEBUG_MODE            1 // no ros communication just some debug prints via serial if set to 1
 #define USE_RC_INPUT          1
 #define PUBLISH_RC_INPUT      0
 #define USE_RC_OUTPUT         1
-#define USE_OPTICAL_INPUT     0
+#define USE_OPTICAL_INPUT     1
 #define PUBLISH_OPTICAL_INPUT 0
 #define USE_ENCODER_INPUT     1
 #define PUBLISH_ENCODER_INPUT 1
 #define RELAY_RC_COMMAND      1
-#define USE_BATTERY_VOLTAGE   0
+#define USE_BATTERY_VOLTAGE   1
 #define PUBLISH_BATTERY_VOLTAGE 0
 #define USE_GYRO              1
 #define PUBLISH_GYRO_INPUT    0
@@ -511,7 +511,7 @@ void loop() {
 // Encoder
 #if USE_ENCODER_INPUT
   Serial.print("Encoder: ");
-  Serial.println(encoder.totalticks());
+  Serial.println(encoder.deltaticks());
 #endif
 // Battery
 #if USE_BATTERY_VOLTAGE
@@ -534,12 +534,12 @@ void loop() {
   mpu.dmpGetAccel(&aa, fifoBuffer);
   mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
   Serial.print("Accel: xyz\t");
-  Serial.print(aaReal.x);
+  Serial.print(aaReal.x*9.81/8196);
   Serial.print("\t");
-  Serial.print(aaReal.y);
+  Serial.print(aaReal.y*9.81/8196);
   Serial.print("\t");
-  Serial.println(aaReal.z);
+  Serial.println(aaReal.z*9.81/8196);
 #endif
-delay(1000);
+delay(500);
 }
 #endif

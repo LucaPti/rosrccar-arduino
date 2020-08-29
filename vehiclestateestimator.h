@@ -2,11 +2,27 @@
 #define VEHICLESTATEESTIMATOR
 
 #include <rosrccar_messages/VehicleState.h>
-#define ACCELERATION_SCALE (9.81/32767)
+#define ACCELERATION_SCALE (9.81/8196)
 
 // wheel circumference approximately 21 cm
-// roughly 55 ticks per wheel revolution
-#define TICKS_TO_METERS 0.21/55
+// roughly 24 ticks per wheel revolution
+#define TICKS_TO_METERS 0.21/24
+#define usec_TO_sec 1e-6
+
+// States to estimate:
+//  pos_x
+//  pos_y
+//  yaw
+//  velocity
+//  yawrate
+//  acc_x
+//  acc_y
+//  slipangle
+//  slip
+//  enginespeed
+//  acc_comand
+//  steer_command
+//  valid (boolean)
 
 static inline int8_t sgn(int val) {
  if (val < 0) return -1;
@@ -30,10 +46,10 @@ class VehicleStateEstimator {
 
 void VehicleStateEstimator::update(int acc_x, int acc_y, float yaw, unsigned int delta_encoder_tics, unsigned int delta_time, float steering_command, float accelerator_command) {
   // Velocity vector
-  velocity_x += ACCELERATION_SCALE*acc_x*(delta_time*1e-6);
-  velocity_y += ACCELERATION_SCALE*acc_y*(delta_time*1e-6);
+  velocity_x += ACCELERATION_SCALE*acc_x*(delta_time*usec_TO_sec);
+  velocity_y += ACCELERATION_SCALE*acc_y*(delta_time*usec_TO_sec);
   //state.velocity = sqrt((velocity_x*velocity_x)+(velocity_y*velocity_y));
-  state.velocity = delta_encoder_tics*TICKS_TO_METERS/(delta_time*1e-6);
+  state.velocity = delta_encoder_tics*TICKS_TO_METERS/(delta_time*usec_TO_sec);
   if(abs(state.velocity)>1e-2) {
     if(state.velocity>0) {
       driving_direction = 1;
