@@ -1,18 +1,18 @@
 // ############### Configuration
-#define DEBUG_MODE            1 // no ros communication just some debug prints via serial if set to 1
+#define DEBUG_MODE            0 // no ros communication just some debug prints via serial if set to 1
 #define USE_RC_INPUT          1
 #define PUBLISH_RC_INPUT      0
 #define USE_RC_OUTPUT         1
+#define RELAY_RC_COMMAND      1
 #define USE_OPTICAL_INPUT     1
 #define PUBLISH_OPTICAL_INPUT 0
 #define USE_ENCODER_INPUT     1
-#define PUBLISH_ENCODER_INPUT 1
-#define RELAY_RC_COMMAND      1
+#define PUBLISH_ENCODER_INPUT 0
 #define USE_BATTERY_VOLTAGE   1
-#define PUBLISH_BATTERY_VOLTAGE 0
+#define PUBLISH_BATTERY_VOLTAGE 1
 #define USE_GYRO              1
 #define PUBLISH_GYRO_INPUT    0
-#define PUBLISH_VEHICLE_STATE 0
+#define PUBLISH_VEHICLE_STATE 1
 #define PUBLISH_VEHICLE_HEALTH 0
 
 // ############### Pinout
@@ -35,6 +35,7 @@
 // ############### Includes
 #include "ros.h"
 #include "ArduinoHardware.h"
+#include "limitingcontroller.h"
 #if PUBLISH_VEHICLE_STATE
 #include "vehiclestateestimator.h"
 #include <rosrccar_messages/VehicleState.h>
@@ -83,6 +84,7 @@ ros::NodeHandle node_handle;
 unsigned long time_last_loop_microseconds(0);
 unsigned long time_current_loop_microseconds(0);
 unsigned long desired_sample_time_microseconds(20000);
+LimitingController limitcontroller(0.02,0.001);
 
 #if USE_RC_INPUT
   RCReader acceleratorinput(ACCELERATOR_INPUT_PIN);
@@ -257,13 +259,13 @@ void loop() {
         //vehiclestate_msg.enginespeed = encoder.deltaticks()/(4*2*3.141592);
       #endif
       #if PUBLISH_ENCODER_INPUT
-        encoder_msg.data = encoder.getangularvelocity();
+        encoder_msg.data = encoder.getangularspeed();
         encoder_publisher.publish( &encoder_msg );
       #endif
     #endif
     
     #if RELAY_RC_COMMAND
-      acceleratoroutput.write(rc_msg.accelerator*90*0.5+90); // Calibration: Car reacts only to about 50% of command range
+      acceleratoroutput.write(limitcontroller.evaluate(10,-10,estimator.state.velocity,rc_msg.accelerator)*90*0.5+90); // Calibration: Car reacts only to about 50% of command range
       steeringoutput.write(rc_msg.steering*90*0.5+90);
     #else
       // RC output handled via interrupt
@@ -303,7 +305,7 @@ void loop() {
     #endif
 
     #if PUBLISH_VEHICLE_STATE
-      estimator.update(aaReal.x, aaReal.y, ypr[0], encoder.deltaticks(), 20000, steeringinput.failsafeinput(), acceleratorinput.failsafeinput());
+      estimator.update(aaReal.x, aaReal.y, ypr[0], encoder.getangularspeed(), 20000, steeringinput.failsafeinput(), acceleratorinput.failsafeinput());
       vehiclestate_publisher.publish( &estimator.state);
     #endif
 
@@ -330,7 +332,7 @@ void loop() {
   }
 }
 
-#else // DEBUG MODE, no ROS communication, just prints via serial
+#else // DEBUG MODE, no ROS communication, just prints via serial #####################################################################################################################################
 // ############### Global variables & functions
 #if USE_RC_INPUT
 RCReader acceleratorinput(ACCELERATOR_INPUT_PIN);
@@ -506,7 +508,7 @@ void loop() {
 // Encoder
 #if USE_ENCODER_INPUT
   Serial.print("Encoder: ");
-  Serial.println(encoder.getangularvelocity());
+  Serial.println(encoder.getangularspeed());
 #endif
 // Battery
 #if USE_BATTERY_VOLTAGE

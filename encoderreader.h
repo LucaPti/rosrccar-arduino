@@ -3,16 +3,22 @@
 
 #include <limits.h>
 #include "pwmreader.h"
+#define MICROS_STANDSTILL 100000
 
 class EncoderReader : public PWMReader {
   protected:
-    unsigned int ticks_per_revolution;
+    float ticks_per_revolution_times_usec_to_sec;
   public:
-    EncoderReader(int attachTo, int ticksperrevolution):PWMReader(attachTo),ticks_per_revolution(ticksperrevolution){}
-    float getangularvelocity();
+    EncoderReader(int attachTo, int ticksperrevolution):PWMReader(attachTo),ticks_per_revolution_times_usec_to_sec(ticksperrevolution*1e-6){}
+    float getangularspeed();
 };
 
-float EncoderReader::getangularvelocity() {
-  return PI/(pwm_interval*ticks_per_revolution);
+float EncoderReader::getangularspeed() {
+  if((micros()-phase_start_time)>MICROS_STANDSTILL||(pwm_interval==0)||(pwm_interval>MICROS_STANDSTILL)) {
+    return 0;
+  }
+  else {
+    return PI/(pwm_interval*ticks_per_revolution_times_usec_to_sec);
+  }
 }
 #endif

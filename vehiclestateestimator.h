@@ -7,6 +7,7 @@
 // wheel circumference approximately 21 cm
 // roughly 24 ticks per wheel revolution
 #define TICKS_TO_METERS 0.21/24
+#define RATIO_DRIVETRAIN_TO_WHEEL 0.21*PI/1.5
 #define usec_TO_sec 1e-6
 
 // States to estimate:
@@ -33,7 +34,7 @@ static inline int8_t sgn(int val) {
 class VehicleStateEstimator {
   public:
     VehicleStateEstimator(){}
-    void update(int acc_x, int acc_y, float yaw, unsigned int delta_encoder_tics, unsigned int delta_time_microseconds, float steering_command, float accelerator_command);
+    void update(int acc_x, int acc_y, float yaw, float drivetrain_speed, unsigned int delta_time_microseconds, float steering_command, float accelerator_command);
     rosrccar_messages::VehicleState& getstate(){
       return state;
     }
@@ -44,12 +45,12 @@ class VehicleStateEstimator {
     float velocity_y;
 };
 
-void VehicleStateEstimator::update(int acc_x, int acc_y, float yaw, unsigned int delta_encoder_tics, unsigned int delta_time, float steering_command, float accelerator_command) {
+void VehicleStateEstimator::update(int acc_x, int acc_y, float yaw, float drivetrain_speed, unsigned int delta_time, float steering_command, float accelerator_command) {
   // Velocity vector
   velocity_x += ACCELERATION_SCALE*acc_x*(delta_time*usec_TO_sec);
   velocity_y += ACCELERATION_SCALE*acc_y*(delta_time*usec_TO_sec);
   //state.velocity = sqrt((velocity_x*velocity_x)+(velocity_y*velocity_y));
-  state.velocity = delta_encoder_tics*TICKS_TO_METERS/(delta_time*usec_TO_sec);
+  state.velocity = drivetrain_speed*RATIO_DRIVETRAIN_TO_WHEEL;
   if(abs(state.velocity)>1e-2) {
     if(state.velocity>0) {
       driving_direction = 1;
@@ -78,7 +79,7 @@ void VehicleStateEstimator::update(int acc_x, int acc_y, float yaw, unsigned int
   state.yaw = yaw;
 
   // Engine speed
-  state.enginespeed = 2*PI*delta_encoder_tics/((4*delta_time)*1e-6);
+  state.enginespeed = drivetrain_speed;
 
   // Acceleration
   state.acc_x = ACCELERATION_SCALE*acc_x;
