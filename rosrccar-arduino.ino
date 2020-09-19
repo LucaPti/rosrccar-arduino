@@ -12,7 +12,7 @@
 #define PUBLISH_BATTERY_VOLTAGE 0
 #define USE_GYRO              1
 #define PUBLISH_GYRO_INPUT    0
-#define PUBLISH_VEHICLE_STATE 1
+#define PUBLISH_VEHICLE_STATE 0
 #define PUBLISH_VEHICLE_HEALTH 0
 
 // ############### Pinout
@@ -24,12 +24,13 @@
 //      MOSI                 11 // For optical sensor ADNS3050 (ICSP header)
 //      MISO                 12 // For optical sensor ADNS3050 (ICSP header)
 //      SCK                  13 // For optical sensor ADNS3050 (ICSP header)
-//      ENCODER_INPUT_PIN    14 // Pin change interrupt; A0
+#define ENCODER_INPUT_PIN    14 // Pin change interrupt; A0
 #define BATTERY_VOLTAGE      16 // For reading 0.5*v_batt; A2
 //      SDA                  18 // For gyro MPU6050
 //      SCL                  19 // For gyro MPU6050
 // Use additional step-down converter to power peripherals; ensure common ground between all devices and do not accidently short-circuit anything. ;-)
 #define VOLTAGE_CONVERSION 0.0097969543147208 // Factor from analogRead to real battery voltage (measured through divider)
+#define TICKS_PER_REVOLUTION 4
 
 // ############### Includes
 #include "ros.h"
@@ -121,16 +122,13 @@ unsigned long desired_sample_time_microseconds(20000);
 #endif
 
 #if USE_ENCODER_INPUT
-  EncoderReader encoder;
+  EncoderReader encoder(ENCODER_INPUT_PIN, TICKS_PER_REVOLUTION);
   ISR(PCINT1_vect)
   {
-    if(~digitalRead(A0)) // only trigger on falling edge
-    {
-      encoder++;
-    }
+    encoder.processinterrupt();
   }
   #if PUBLISH_ENCODER_INPUT
-    std_msgs::UInt16 encoder_msg;
+    std_msgs::Float32 encoder_msg;
     ros::Publisher encoder_publisher("encoder_sensor", &encoder_msg);
   #endif
 #endif
@@ -259,7 +257,7 @@ void loop() {
         //vehiclestate_msg.enginespeed = encoder.deltaticks()/(4*2*3.141592);
       #endif
       #if PUBLISH_ENCODER_INPUT
-        encoder_msg.data = encoder.totalticks();
+        encoder_msg.data = encoder.getangularvelocity();
         encoder_publisher.publish( &encoder_msg );
       #endif
     #endif
@@ -351,13 +349,10 @@ Servo steeringoutput;
 #endif
 
 #if USE_ENCODER_INPUT
-EncoderReader encoder;
+EncoderReader encoder(ENCODER_INPUT_PIN, TICKS_PER_REVOLUTION);
 ISR(PCINT1_vect)
 {
-  if(~digitalRead(A0)) // only trigger on falling edge
-  {
-    encoder++;
-  }
+  encoder.processinterrupt();
 }
 #endif
 
@@ -511,7 +506,7 @@ void loop() {
 // Encoder
 #if USE_ENCODER_INPUT
   Serial.print("Encoder: ");
-  Serial.println(encoder.deltaticks());
+  Serial.println(encoder.getangularvelocity());
 #endif
 // Battery
 #if USE_BATTERY_VOLTAGE
