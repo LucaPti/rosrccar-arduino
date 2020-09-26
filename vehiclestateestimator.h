@@ -6,8 +6,8 @@
 
 // wheel circumference approximately 21 cm
 // roughly 24 ticks per wheel revolution
-#define TICKS_TO_METERS 0.21/24
-#define RATIO_DRIVETRAIN_TO_WHEEL 0.21*PI/1.5
+#define RATIO_SHAFT_SPEED 0.206*11/34
+#define RATIO_SHAFT_ENGINE 58/24
 #define usec_TO_sec 1e-6
 
 // States to estimate:
@@ -50,7 +50,8 @@ void VehicleStateEstimator::update(int acc_x, int acc_y, float yaw, float drivet
   velocity_x += ACCELERATION_SCALE*acc_x*(delta_time*usec_TO_sec);
   velocity_y += ACCELERATION_SCALE*acc_y*(delta_time*usec_TO_sec);
   //state.velocity = sqrt((velocity_x*velocity_x)+(velocity_y*velocity_y));
-  state.velocity = drivetrain_speed*RATIO_DRIVETRAIN_TO_WHEEL;
+  state.velocity = drivetrain_speed*RATIO_SHAFT_SPEED;
+  state.enginespeed = drivetrain_speed*RATIO_SHAFT_ENGINE;
   if(abs(state.velocity)>1e-2) {
     if(state.velocity>0) {
       driving_direction = 1;

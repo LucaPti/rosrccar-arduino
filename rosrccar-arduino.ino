@@ -5,15 +5,16 @@
 #define USE_RC_OUTPUT         1
 #define RELAY_RC_COMMAND      1
 #define USE_OPTICAL_INPUT     1
-#define PUBLISH_OPTICAL_INPUT 0
+#define PUBLISH_OPTICAL_INPUT 1
 #define USE_ENCODER_INPUT     1
 #define PUBLISH_ENCODER_INPUT 0
 #define USE_BATTERY_VOLTAGE   1
-#define PUBLISH_BATTERY_VOLTAGE 1
+#define PUBLISH_BATTERY_VOLTAGE 0
 #define USE_GYRO              1
 #define PUBLISH_GYRO_INPUT    0
 #define PUBLISH_VEHICLE_STATE 1
 #define PUBLISH_VEHICLE_HEALTH 0
+#define PUBLISH_TIMING        0
 
 // ############### Pinout
 #define ACCELERATOR_INPUT_PIN 2 // RC receiver channel 2
@@ -118,9 +119,12 @@ LimitingController limitcontroller(0.02,0.001);
   ros::Subscriber<rosrccar_messages::RCControl> roscomand_subscriber("rc_output", &rosinterrupt);
 #endif
 
-#if USE_OPTICAL_INPUT&&PUBLISH_OPTICAL_INPUT
-  rosrccar_messages::RawOpticalSensorData optsens_msg;
-  ros::Publisher optsens_publisher("optical_sensor", &optsens_msg);
+#if USE_OPTICAL_INPUT
+  FlexibleIntervalADNS3050 opticalsensor;
+  #if PUBLISH_OPTICAL_INPUT
+    rosrccar_messages::RawOpticalSensorData optsens_msg;
+    ros::Publisher optsens_publisher("optical_sensor", &optsens_msg);
+  #endif
 #endif
 
 #if USE_ENCODER_INPUT
@@ -158,6 +162,11 @@ LimitingController limitcontroller(0.02,0.001);
   #endif
 #endif
 
+#if PUBLISH_TIMING
+  std_msgs::UInt16 timing_msg;
+  ros::Publisher timing_publisher("cycle_time", &timing_msg);
+#endif
+
 // ############### Setup
 void setup() {
   node_handle.getHardware()->setBaud(256000);
@@ -171,7 +180,7 @@ void setup() {
   #endif
   
   #if USE_OPTICAL_INPUT
-    adns3050::startup();
+    opticalsensor.startup();
     #if PUBLISH_OPTICAL_INPUT
       node_handle.advertise(optsens_publisher);
     #endif
@@ -226,6 +235,10 @@ void setup() {
   #if PUBLISH_VEHICLE_HEALTH
     node_handle.advertise(vehiclehealth_publisher);
   #endif
+
+  #if PUBLISH_TIMING
+    node_handle.advertise(timing_publisher);
+  #endif
 }
 
 // ############### Loop
@@ -241,17 +254,24 @@ void loop() {
       #endif
     #endif
   
-    #if USE_OPTICAL_INPUT&&PUBLISH_OPTICAL_INPUT
-      optsens_msg.valid = adns3050::datavalid();
-      if(optsens_msg.valid){
-        optsens_msg.delta_x = adns3050::getX();
-        optsens_msg.delta_y = adns3050::getY();
-      }
-      else {
-        optsens_msg.delta_x = 0;
-        optsens_msg.delta_y = adns3050::measurementquality();
-      }
-      optsens_publisher.publish( &optsens_msg );
+    #if USE_OPTICAL_INPUT
+      opticalsensor.update();
+      delay(1);
+      opticalsensor.update();
+      delay(1);
+      opticalsensor.update();
+      #if PUBLISH_OPTICAL_INPUT
+        optsens_msg.valid = opticalsensor.lastvaluevalid();
+        if(optsens_msg.valid){
+          optsens_msg.delta_x = opticalsensor.velocity_x();
+          optsens_msg.delta_y = opticalsensor.velocity_y();
+        }
+        else {
+          optsens_msg.delta_x = 0;
+          optsens_msg.delta_y = opticalsensor.measurementquality();
+        }
+        optsens_publisher.publish( &optsens_msg );
+      #endif
     #endif
 
     #if USE_ENCODER_INPUT
@@ -326,6 +346,11 @@ void loop() {
       #endif
       vehiclehealth_publisher.publish( &vehiclehealth_msg );
     #endif
+
+    #if PUBLISH_TIMING
+      timing_msg.data = micros()-time_current_loop_microseconds;
+      timing_publisher.publish( &timing_msg );
+    #endif
     
     node_handle.spinOnce();
     time_last_loop_microseconds = time_current_loop_microseconds;
@@ -356,6 +381,10 @@ ISR(PCINT1_vect)
 {
   encoder.processinterrupt();
 }
+#endif
+
+#if USE_OPTICAL_INPUT
+FlexibleIntervalADNS3050 opticalsensor;
 #endif
 
 #if USE_GYRO
@@ -394,7 +423,7 @@ void setup() {
   #endif
   
   #if USE_OPTICAL_INPUT
-  adns3050::startup();
+  opticalsensor.startup();
   #endif
   
   #if USE_RC_OUTPUT
@@ -497,13 +526,18 @@ void loop() {
 #endif
 // Optical Sensor
 #if USE_OPTICAL_INPUT
+  opticalsensor.update();
+  delay(3);
+  opticalsensor.update();
+  delay(3);
+  opticalsensor.update();
   Serial.print("Optical sensor\t x: ");
-  Serial.print(adns3050::getX());
+  Serial.print(opticalsensor.velocity_x());
   Serial.print(" y: ");
-  Serial.print(adns3050::getY());
-  (adns3050::datavalid()) ? Serial.print(" OK") : Serial.print(" ERR");
+  Serial.print(opticalsensor.velocity_y());
+  (opticalsensor.lastvaluevalid()) ? Serial.print(" OK") : Serial.print(" ERR");
   Serial.print(" quality: ");
-  Serial.println(adns3050::measurementquality());
+  Serial.println(opticalsensor.measurementquality());
 #endif
 // Encoder
 #if USE_ENCODER_INPUT
