@@ -121,6 +121,11 @@ class ADNS3050Reader {
       m = Read(SQUAL);
       return (static_cast<unsigned int>(m)<<1);
     }
+    bool datavalid(){
+      byte s = 0;
+      s = Read(MOTION_ST);
+      return((s&(1<<7))!=0);
+    }
   protected:
     int getX(){//returns the X acceleration value
       byte x = 0;
@@ -131,11 +136,6 @@ class ADNS3050Reader {
       byte y = 0;
       y= Read(0x04);
       return(convTwosComp(y));
-    }
-    bool datavalid(){
-      byte s = 0;
-      s = Read(MOTION_ST);
-      return((s&(1<<7))!=0);
     }
 };
 

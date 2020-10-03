@@ -3,18 +3,15 @@
 #define USE_RC_INPUT          1
 #define PUBLISH_RC_INPUT      0
 #define USE_RC_OUTPUT         1
-#define RELAY_RC_COMMAND      1
-#define USE_OPTICAL_INPUT     1
-#define PUBLISH_OPTICAL_INPUT 1
+#define USE_OPTICAL_INPUT     0
 #define USE_ENCODER_INPUT     1
-#define PUBLISH_ENCODER_INPUT 0
 #define USE_BATTERY_VOLTAGE   1
-#define PUBLISH_BATTERY_VOLTAGE 0
+#define PUBLISH_BATTERY_VOLTAGE 1
 #define USE_GYRO              1
 #define PUBLISH_GYRO_INPUT    0
 #define PUBLISH_VEHICLE_STATE 1
-#define PUBLISH_VEHICLE_HEALTH 0
 #define PUBLISH_TIMING        0
+#define RECEIVE_ROS_COMMAND   1
 
 // ############### Pinout
 #define ACCELERATOR_INPUT_PIN 2 // RC receiver channel 2
@@ -37,19 +34,16 @@
 #include "ros.h"
 #include "ArduinoHardware.h"
 #include "limitingcontroller.h"
+#include "customdatatypes.h"
 #if PUBLISH_VEHICLE_STATE
 #include "vehiclestateestimator.h"
 #include <rosrccar_messages/VehicleState.h>
-#endif
-#if PUBLISH_VEHICLE_HEALTH
-#include <rosrccar_messages/VehicleHealth.h>
 #endif
 #if USE_RC_INPUT
 #include <rosrccar_messages/RCControl.h>
 #include "rcreader.h"
 #endif
 #if USE_OPTICAL_INPUT
-#include <rosrccar_messages/RawOpticalSensorData.h>
 #include "ADNS3050.h"
 #endif
 #if USE_RC_OUTPUT
@@ -69,24 +63,22 @@
 #include "Wire.h"
 #include <geometry_msgs/Twist.h>
 #endif
+#include <rosrccar_messages/VehicleCommand.h>
 
 #if !DEBUG_MODE // Normal "production mode" loop
 // ############### Global variables & functions
 ros::NodeHandle node_handle;
+VehicleMeasurement measurements;
+rosrccar_messages::VehicleCommand vehiclecommand;
+unsigned long time_last_loop_microseconds(0);
+unsigned long time_current_loop_microseconds(0);
+unsigned long desired_sample_time_microseconds(20000);
+
 #if PUBLISH_VEHICLE_STATE
   // rosrccar_messages::VehicleState vehiclestate_msg;
   VehicleStateEstimator estimator;
   ros::Publisher vehiclestate_publisher("vehicle_state", &estimator.state);
 #endif
-#if PUBLISH_VEHICLE_HEALTH
-  rosrccar_messages::VehicleHealth vehiclehealth_msg;
-  ros::Publisher vehiclehealth_publisher("vehicle_health", &vehiclehealth_msg);
-#endif
-unsigned long time_last_loop_microseconds(0);
-unsigned long time_current_loop_microseconds(0);
-unsigned long desired_sample_time_microseconds(20000);
-LimitingController limitcontroller(0.02,0.001);
-
 #if USE_RC_INPUT
   RCReader acceleratorinput(ACCELERATOR_INPUT_PIN);
   RCReader steeringinput(STEERING_INPUT_PIN);
@@ -97,8 +89,8 @@ LimitingController limitcontroller(0.02,0.001);
   void steeringinterrupt() {
     steeringinput.processinterrupt();
   }
-  rosrccar_messages::RCControl rc_msg;
   #if PUBLISH_RC_INPUT
+    rosrccar_messages::RCControl rc_msg;
     ros::Publisher rc_publisher("rc_input", &rc_msg);
   #endif
 #endif
@@ -106,25 +98,17 @@ LimitingController limitcontroller(0.02,0.001);
 #if USE_RC_OUTPUT
   Servo acceleratoroutput;
   Servo steeringoutput;
-
-  void rosinterrupt(const rosrccar_messages::RCControl ros_comand) {
-    if(ros_comand.valid) {
-    #if !(RELAY_RC_COMMAND)
-      acceleratoroutput.write(ros_comand.accelerator*90*0.5+90); // Calibration: Car reacts only to about 50% of command range
-      steeringoutput.write(ros_comand.steering*90*0.5+90);
-    #endif
-    }
+#endif
+#if RECEIVE_ROS_COMMAND
+  void rosinterrupt(const rosrccar_messages::VehicleCommand ros_command_received) {
+    vehiclecommand = ros_command_received;
   }
 
-  ros::Subscriber<rosrccar_messages::RCControl> roscomand_subscriber("rc_output", &rosinterrupt);
+  ros::Subscriber<rosrccar_messages::VehicleCommand> roscomand_subscriber("vehicle_command", &rosinterrupt);
 #endif
 
 #if USE_OPTICAL_INPUT
   FlexibleIntervalADNS3050 opticalsensor;
-  #if PUBLISH_OPTICAL_INPUT
-    rosrccar_messages::RawOpticalSensorData optsens_msg;
-    ros::Publisher optsens_publisher("optical_sensor", &optsens_msg);
-  #endif
 #endif
 
 #if USE_ENCODER_INPUT
@@ -133,14 +117,10 @@ LimitingController limitcontroller(0.02,0.001);
   {
     encoder.processinterrupt();
   }
-  #if PUBLISH_ENCODER_INPUT
-    std_msgs::Float32 encoder_msg;
-    ros::Publisher encoder_publisher("encoder_sensor", &encoder_msg);
-  #endif
 #endif
 
 #if USE_BATTERY_VOLTAGE&&PUBLISH_BATTERY_VOLTAGE
-  std_msgs::Float32 battery_msg;
+  std_msgs::UInt16 battery_msg;
   ros::Publisher battery_publisher("battery_voltage", &battery_msg);
 #endif
 
@@ -169,6 +149,8 @@ LimitingController limitcontroller(0.02,0.001);
 
 // ############### Setup
 void setup() {
+  vehiclecommand.operationmode_lon = manual;
+  vehiclecommand.operationmode_lat = manual;
   node_handle.getHardware()->setBaud(256000);
   node_handle.initNode();
   #if USE_RC_INPUT
@@ -181,15 +163,15 @@ void setup() {
   
   #if USE_OPTICAL_INPUT
     opticalsensor.startup();
-    #if PUBLISH_OPTICAL_INPUT
-      node_handle.advertise(optsens_publisher);
-    #endif
+  #endif
+
+  #if RECEIVE_ROS_COMMAND
+    node_handle.subscribe(roscomand_subscriber);
   #endif
   
   #if USE_RC_OUTPUT
     acceleratoroutput.attach(ACCELERATOR_OUTPUT_PIN);
     steeringoutput.attach(STEERING_OUTPUT_PIN);
-    node_handle.subscribe(roscomand_subscriber);
   #endif
 
   #if USE_ENCODER_INPUT
@@ -197,9 +179,6 @@ void setup() {
     PCICR |= 0b00000010; // Enables Port C (PCIE1) Pin Change Interrupts
     PCMSK1 |= 0b00000001; // PCINT11 bzw. A3 aktiv, Pins A5-A0
     sei();
-    #if PUBLISH_ENCODER_INPUT
-      node_handle.advertise(encoder_publisher);
-    #endif
   #endif
 
   #if USE_BATTERY_VOLTAGE&&PUBLISH_BATTERY_VOLTAGE
@@ -232,10 +211,6 @@ void setup() {
     node_handle.advertise(vehiclestate_publisher);
   #endif
 
-  #if PUBLISH_VEHICLE_HEALTH
-    node_handle.advertise(vehiclehealth_publisher);
-  #endif
-
   #if PUBLISH_TIMING
     node_handle.advertise(timing_publisher);
   #endif
@@ -245,59 +220,38 @@ void setup() {
 void loop() {
   time_current_loop_microseconds = micros();
   if(time_current_loop_microseconds >= time_last_loop_microseconds+desired_sample_time_microseconds) {
-    #if USE_RC_INPUT
-      rc_msg.accelerator = acceleratorinput.failsafeinput();
-      rc_msg.steering = steeringinput.failsafeinput();
-      rc_msg.valid = acceleratorinput.signalisvalid()&&steeringinput.signalisvalid();
-      #if PUBLISH_RC_INPUT
-        rc_publisher.publish( &rc_msg );
-      #endif
-    #endif
-  
+
     #if USE_OPTICAL_INPUT
+      while((!opticalsensor.datavalid())&&(micros()<(time_current_loop_microseconds+3e3))) {}; //wait for optical sensor
       opticalsensor.update();
-      delay(1);
+      while((!opticalsensor.datavalid())&&(micros()<(time_current_loop_microseconds+6e3))) {}; //wait for optical sensor
       opticalsensor.update();
-      delay(1);
+      while((!opticalsensor.datavalid())&&(micros()<(time_current_loop_microseconds+9e3))) {}; //wait for optical sensor
       opticalsensor.update();
-      #if PUBLISH_OPTICAL_INPUT
-        optsens_msg.valid = opticalsensor.lastvaluevalid();
-        if(optsens_msg.valid){
-          optsens_msg.delta_x = opticalsensor.velocity_x();
-          optsens_msg.delta_y = opticalsensor.velocity_y();
-        }
-        else {
-          optsens_msg.delta_x = 0;
-          optsens_msg.delta_y = opticalsensor.measurementquality();
-        }
-        optsens_publisher.publish( &optsens_msg );
+      measurements.opticalvelocityx_mps = opticalsensor.velocity_x();
+      measurements.opticalvelocityy_mps = opticalsensor.velocity_y();
+    #endif
+    
+    #if USE_RC_INPUT
+      measurements.rcaccelerator = acceleratorinput.failsafeinput();
+      measurements.rcsteering = steeringinput.failsafeinput();
+      #if PUBLISH_RC_INPUT
+        rc_msg.accelerator = measurements.rcaccelerator;
+        rc_msg.rcsteering = measurements.rcsteering;
+        rc_msg.valid = acceleratorinput.signalisvalid()&&steeringinput.signalisvalid();
+        rc_publisher.publish( &rc_msg );
       #endif
     #endif
 
     #if USE_ENCODER_INPUT
-      #if PUBLISH_VEHICLE_STATE
-        //vehiclestate_msg.enginespeed = encoder.deltaticks()/(4*2*3.141592);
-      #endif
-      #if PUBLISH_ENCODER_INPUT
-        encoder_msg.data = encoder.getangularspeed();
-        encoder_publisher.publish( &encoder_msg );
-      #endif
+      measurements.driveshaftspeed_radps = encoder.getangularspeed();
     #endif
     
-    #if RELAY_RC_COMMAND
-      acceleratoroutput.write(limitcontroller.evaluate(10,-10,estimator.state.velocity,rc_msg.accelerator)*90*0.5+90); // Calibration: Car reacts only to about 50% of command range
-      steeringoutput.write(rc_msg.steering*90*0.5+90);
-    #else
-      // RC output handled via interrupt
-    #endif
-
     #if USE_BATTERY_VOLTAGE
+      measurements.batteryvoltage_volt = VOLTAGE_CONVERSION*analogRead(BATTERY_VOLTAGE);
       #if PUBLISH_BATTERY_VOLTAGE
-        battery_msg.data = analogRead(BATTERY_VOLTAGE);
+        battery_msg.data = (unsigned int)(1e3*measurements.batteryvoltage_volt);
         battery_publisher.publish( &battery_msg );
-      #endif
-      #if PUBLISH_VEHICLE_HEALTH
-        vehiclehealth_msg.battery_voltage = analogRead(BATTERY_VOLTAGE);
       #endif
     #endif
 
@@ -308,47 +262,68 @@ void loop() {
       mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
       mpu.dmpGetAccel(&aa, fifoBuffer);
       mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
+      measurements.accelerationx_mps2 = aaReal.x*9.81/8196;
+      measurements.accelerationy_mps2 = aaReal.y*9.81/8196;
+      measurements.yaw_rad = ypr[0];
       #if PUBLISH_GYRO_INPUT
-        gyro_msg.linear.x = aaReal.x;
-        gyro_msg.linear.y = aaReal.y;
-        gyro_msg.linear.z = aaReal.z;
+        gyro_msg.linear.x = measurements.accelerationx_mps2;
+        gyro_msg.linear.y = measurements.accelerationy_mps2;
+        gyro_msg.linear.z = aaReal.z*9.81/8196;
         gyro_msg.angular.z = ypr[0];
         gyro_msg.angular.x = ypr[1];
         gyro_msg.angular.y = ypr[2];
         gyro_publisher.publish( &gyro_msg );
       #endif
-      #if PUBLISH_VEHICLE_STATE
-        //vehiclestate_msg.yaw = ypr[0];
-        //vehiclestate_msg.acc_x = aaReal.x;
-        //vehiclestate_msg.acc_y = aaReal.y;
-      #endif
     #endif
 
     #if PUBLISH_VEHICLE_STATE
-      estimator.update(aaReal.x, aaReal.y, ypr[0], encoder.getangularspeed(), 20000, steeringinput.failsafeinput(), acceleratorinput.failsafeinput());
+//      estimator.state.acc_command_e3 = -42;
+//      estimator.state.steer_command_e3 = int(float(steeringoutput.read()-90)/180.0*1e3);
+      estimator.update(measurements, 2e3);
       vehiclestate_publisher.publish( &estimator.state);
     #endif
 
-    #if PUBLISH_VEHICLE_HEALTH
-      vehiclehealth_msg.pass_on_rc = RELAY_RC_COMMAND;
-      //vehiclehealth_msg.speedlimit
-      vehiclehealth_msg.limit_speed = false;
-      //vehiclehealth_msg.rpmlimit
-      vehiclehealth_msg.limit_rpm = false;
-      #if USE_RC_INPUT
-        vehiclehealth_msg.rc_available = acceleratorinput.signalisvalid()&&steeringinput.signalisvalid();
-      #endif
-      #if USE_OPTICAL_INPUT
-        vehiclehealth_msg.optical_available
-      #endif
-      #if USE_GYRO
-        vehiclehealth_msg.imu_available = true;
-      #endif
-      vehiclehealth_publisher.publish( &vehiclehealth_msg );
+    #if USE_RC_OUTPUT
+      if(vehiclecommand.operationmode_lon==manual){
+        acceleratoroutput.write(measurements.rcaccelerator*90*0.5+90); // Calibration: Car reacts only to about 50% of command range
+        estimator.state.acc_command_e3 = measurements.rcaccelerator*1e3;
+      }
+      else if(vehiclecommand.operationmode_lon == automated) {
+//        if(measurements.rcaccelerator<0.5) {
+//          acceleratoroutput.write(90); // deactivate temporarily
+//          steeringoutput.write(90);
+//          vehiclecommand.operationmode_lon = manual;
+//          vehiclecommand.operationmode_lat = manual;
+//        }
+        acceleratoroutput.write(vehiclecommand.target_lon/1e3*90*0.5+90); // Calibration: Car reacts only to about 50% of command range
+        estimator.state.acc_command_e3 = vehiclecommand.target_lon;
+      }
+      else if(vehiclecommand.operationmode_lon == off) {
+        acceleratoroutput.write(90);
+        estimator.state.acc_command_e3 = 0;
+      }
+      else if(vehiclecommand.operationmode_lon == manual_limitedspeed) {
+        // to do
+      }
+      if(vehiclecommand.operationmode_lat==manual){
+        steeringoutput.write(measurements.rcsteering*90*0.5+90);
+        estimator.state.steer_command_e3 = measurements.rcsteering*1e3;
+      }
+      else if(vehiclecommand.operationmode_lat == automated) {
+        steeringoutput.write(vehiclecommand.target_lat/1e3*90*0.5+90); // Calibration: Car reacts only to about 50% of command range
+        estimator.state.steer_command_e3 = vehiclecommand.target_lat;
+      }
+      else if(vehiclecommand.operationmode_lat == off) {
+        steeringoutput.write(90);
+        estimator.state.steer_command_e3 = 0;
+      }
+      estimator.state.operationmode_lon = vehiclecommand.operationmode_lon;
+      estimator.state.operationmode_lat = vehiclecommand.operationmode_lat;
     #endif
 
     #if PUBLISH_TIMING
-      timing_msg.data = micros()-time_current_loop_microseconds;
+      measurements.looptime_usec = micros()-time_current_loop_microseconds;
+      timing_msg.data = measurements.looptime_usec;
       timing_publisher.publish( &timing_msg );
     #endif
     
@@ -520,7 +495,7 @@ void loop() {
   Serial.println(";");
 #endif
 // RC Output
-#if (USE_RC_OUTPUT&&RELAY_RC_COMMAND&&USE_RC_INPUT)
+#if (USE_RC_OUTPUT&&USE_RC_INPUT)
   Serial.println("Applying steering to servo.");
   steeringoutput.write(steeringinput.failsafeinput()*90*0.5+90);
 #endif
@@ -571,6 +546,6 @@ void loop() {
   Serial.print("\t");
   Serial.println(aaReal.z*9.81/8196);
 #endif
-delay(500);
+delay(250);
 }
 #endif

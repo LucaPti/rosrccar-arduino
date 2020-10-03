@@ -11,19 +11,14 @@
 #define usec_TO_sec 1e-6
 
 // States to estimate:
-//  pos_x
-//  pos_y
-//  yaw
-//  velocity
-//  yawrate
-//  acc_x
-//  acc_y
-//  slipangle
-//  slip
-//  enginespeed
-//  acc_comand
-//  steer_command
-//  valid (boolean)
+//int16 yaw_rad_e3        # yaw                       in radians         times 1000 
+//int16 slipangle_rad_e3  # slip angle                 in radians         times 1000
+//int16 wheelspeed_mps_e3 # wheelspeed                in meters/second   times 1000
+//int16 yawrate_radps_e3  # yawrate                   in radians/second  times 1000 
+//int16 acc_x_mps2_e3     # longitudinal acceleration in meters/second^2 times 1000
+//int16 acc_y_mps2_e3     # lateral acceleration      in meters/second^2 times 1000
+//int16 acc_command_e3    # accelerator command       between -1 and 1   times 1000
+//int16 steer_command_e3  # steering command          between -1 and 1   times 1000
 
 static inline int8_t sgn(int val) {
  if (val < 0) return -1;
@@ -34,61 +29,23 @@ static inline int8_t sgn(int val) {
 class VehicleStateEstimator {
   public:
     VehicleStateEstimator(){}
-    void update(int acc_x, int acc_y, float yaw, float drivetrain_speed, unsigned int delta_time_microseconds, float steering_command, float accelerator_command);
+    void update(VehicleMeasurement& measurements, unsigned int delta_time_microseconds);
     rosrccar_messages::VehicleState& getstate(){
       return state;
     }
     rosrccar_messages::VehicleState state;
   private:
     int driving_direction;
-    float velocity_x;
-    float velocity_y;
 };
 
-void VehicleStateEstimator::update(int acc_x, int acc_y, float yaw, float drivetrain_speed, unsigned int delta_time, float steering_command, float accelerator_command) {
-  // Velocity vector
-  velocity_x += ACCELERATION_SCALE*acc_x*(delta_time*usec_TO_sec);
-  velocity_y += ACCELERATION_SCALE*acc_y*(delta_time*usec_TO_sec);
-  //state.velocity = sqrt((velocity_x*velocity_x)+(velocity_y*velocity_y));
-  state.velocity = drivetrain_speed*RATIO_SHAFT_SPEED;
-  state.enginespeed = drivetrain_speed*RATIO_SHAFT_ENGINE;
-  if(abs(state.velocity)>1e-2) {
-    if(state.velocity>0) {
-      driving_direction = 1;
-    }
-    else {
-      driving_direction = -1;
-    }
-  }
-  else {
-    driving_direction = 0;
-  }
-
-  // Slip angle, yaw rate and yaw
-  if(abs(velocity_x)>1e-2) {
-    state.slipangle = velocity_y/velocity_x; // Should be a tangent
-  }
-  else {
-    if(velocity_y>0) {
-      state.slipangle = PI/2;
-    }
-    else {
-      state.slipangle = -PI/2;
-    }
-  }
-  state.yawrate = (yaw-state.yaw)/(delta_time*1e-6);
-  state.yaw = yaw;
-
-  // Engine speed
-  state.enginespeed = drivetrain_speed;
-
-  // Acceleration
-  state.acc_x = ACCELERATION_SCALE*acc_x;
-  state.acc_y = ACCELERATION_SCALE*acc_y;
-
-  state.acc_command = accelerator_command;
-  state.steer_command = steering_command;
-  
-  state.valid = true;
+void VehicleStateEstimator::update(VehicleMeasurement& measurements, unsigned int delta_time_microseconds) {
+  state.yawrate_radps_e3 = (measurements.yaw_rad*1e3-state.yaw_rad_e3)*50;//needs some investigation
+  state.yaw_rad_e3 = int(measurements.yaw_rad*1e3);
+  state.slipangle_rad_e3 = 0;
+  state.wheelspeed_mps_e3 = int(RATIO_SHAFT_SPEED*1e3*measurements.driveshaftspeed_radps);
+  state.acc_x_mps2_e3 = int(measurements.accelerationx_mps2*1e3);
+  state.acc_y_mps2_e3 = int(measurements.accelerationy_mps2*1e3);
+//  state.acc_command_e3 = int(measurements.rcaccelerator*1e3);
+//  state.steer_command_e3 = int(measurements.rcsteering*1e3);
 }
 #endif
