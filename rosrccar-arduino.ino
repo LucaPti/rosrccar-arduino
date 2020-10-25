@@ -18,6 +18,7 @@
 #define STEERING_INPUT_PIN    3 // RC receiver channel 1
 #define ACCELERATOR_OUTPUT_PIN 5// PWM for electronic speed controller
 #define STEERING_OUTPUT_PIN   6 // PWM for steering servo
+#define BUTTON_PIN            7 // For local input, e.g. shutting down the Pi or stopping/starting recording
 //      SS                   10 // For optical sensor ADNS3050 (ICSP header)
 //      MOSI                 11 // For optical sensor ADNS3050 (ICSP header)
 //      MISO                 12 // For optical sensor ADNS3050 (ICSP header)
@@ -64,6 +65,7 @@
 #include <geometry_msgs/Twist.h>
 #endif
 #include <rosrccar_messages/VehicleCommand.h>
+#include "buttonstatemachine.h"
 
 #if !DEBUG_MODE // Normal "production mode" loop
 // ############### Global variables & functions
@@ -73,6 +75,7 @@ rosrccar_messages::VehicleCommand vehiclecommand;
 unsigned long time_last_loop_microseconds(0);
 unsigned long time_current_loop_microseconds(0);
 unsigned long desired_sample_time_microseconds(20000);
+ButtonStateMachine button(BUTTON_PIN);
 
 #if PUBLISH_VEHICLE_STATE
   // rosrccar_messages::VehicleState vehiclestate_msg;
@@ -284,17 +287,17 @@ void loop() {
     #endif
 
     #if USE_RC_OUTPUT
+      if(measurements.rcaccelerator<-0.5) {
+        acceleratoroutput.write(90); // deactivate temporarily
+        steeringoutput.write(90);
+        vehiclecommand.operationmode_lon = off;
+        vehiclecommand.operationmode_lat = off;
+      }
       if(vehiclecommand.operationmode_lon==manual){
         acceleratoroutput.write(measurements.rcaccelerator*90*0.5+90); // Calibration: Car reacts only to about 50% of command range
         estimator.state.acc_command_e3 = measurements.rcaccelerator*1e3;
       }
       else if(vehiclecommand.operationmode_lon == automated) {
-//        if(measurements.rcaccelerator<0.5) {
-//          acceleratoroutput.write(90); // deactivate temporarily
-//          steeringoutput.write(90);
-//          vehiclecommand.operationmode_lon = manual;
-//          vehiclecommand.operationmode_lat = manual;
-//        }
         acceleratoroutput.write(vehiclecommand.target_lon/1e3*90*0.5+90); // Calibration: Car reacts only to about 50% of command range
         estimator.state.acc_command_e3 = vehiclecommand.target_lon;
       }
@@ -321,13 +324,25 @@ void loop() {
       estimator.state.operationmode_lat = vehiclecommand.operationmode_lat;
     #endif
 
+    if(button.update_status()!=0){
+      if(button.current_status==1){
+        estimator.state.operationmode_lat = pi_command_start_recording;
+      }
+      if(button.current_status==3){
+        estimator.state.operationmode_lat = pi_command_stop_recording;
+      }
+      if(button.current_status==3){
+        estimator.state.operationmode_lat = pi_command_shutdown;
+      }
+    }
+
     #if PUBLISH_TIMING
-      measurements.looptime_usec = micros()-time_current_loop_microseconds;
       timing_msg.data = measurements.looptime_usec;
       timing_publisher.publish( &timing_msg );
     #endif
     
     node_handle.spinOnce();
+    measurements.looptime_usec = micros()-time_current_loop_microseconds;
     time_last_loop_microseconds = time_current_loop_microseconds;
   }
 }

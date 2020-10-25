@@ -37,7 +37,10 @@ enum VehicleOperationMode {
   manual,
   manual_limitedspeed,
   manual_limitedslip,
-  automated
+  automated,
+  pi_command_start_recording,
+  pi_command_stop_recording,
+  pi_command_shutdown
 };
 
 #endif
