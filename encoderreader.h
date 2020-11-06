@@ -18,7 +18,7 @@ float EncoderReader::getangularspeed() {
     return 0;
   }
   else {
-    return PI/(pwm_interval*ticks_per_revolution_times_usec_to_sec);
+    return TWO_PI/(pwm_interval*ticks_per_revolution_times_usec_to_sec);
   }
 }
 #endif

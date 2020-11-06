@@ -6,7 +6,7 @@
 
 // wheel circumference approximately 21 cm
 // roughly 24 ticks per wheel revolution
-#define RATIO_SHAFT_SPEED 0.206*11/34
+#define RATIO_SHAFT_SPEED 0.206*11/34/TWO_PI
 #define RATIO_SHAFT_ENGINE 58/24
 #define usec_TO_sec 1e-6
 

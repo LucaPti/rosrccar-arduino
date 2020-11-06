@@ -282,7 +282,7 @@ void loop() {
     #if PUBLISH_VEHICLE_STATE
 //      estimator.state.acc_command_e3 = -42;
 //      estimator.state.steer_command_e3 = int(float(steeringoutput.read()-90)/180.0*1e3);
-      estimator.update(measurements, 2e3);
+      estimator.update(measurements, desired_sample_time_microseconds);
       vehiclestate_publisher.publish( &estimator.state);
     #endif
 
