@@ -3,6 +3,7 @@
 
 #include <rosrccar_messages/VehicleState.h>
 #define ACCELERATION_SCALE (9.81/8196)
+#define EXPONENTIALAVERAGE 0.995
 
 // wheel circumference approximately 21 cm
 // roughly 24 ticks per wheel revolution
@@ -35,7 +36,8 @@ class VehicleStateEstimator {
     }
     rosrccar_messages::VehicleState state;
   private:
-    int driving_direction;
+    float offset_ax
+    float offset_ay
 };
 
 void VehicleStateEstimator::update(VehicleMeasurement& measurements, unsigned int delta_time_microseconds) {
@@ -43,8 +45,12 @@ void VehicleStateEstimator::update(VehicleMeasurement& measurements, unsigned in
   state.yaw_rad_e3 = int(measurements.yaw_rad*1e3);
   state.slipangle_rad_e3 = 0;
   state.wheelspeed_mps_e3 = int(RATIO_SHAFT_SPEED*1e3*measurements.driveshaftspeed_radps);
-  state.acc_x_mps2_e3 = int(measurements.accelerationx_mps2*1e3);
-  state.acc_y_mps2_e3 = int(measurements.accelerationy_mps2*1e3);
+  if(state.wheelspeed_mps_e3==0) { // estimate offset when standing
+    offset_ax = EXPONENTIALAVERAGE*offset_ax+(1-EXPONENTIALAVERAGE)*measurements.accelerationx_mps2;
+    offset_ay = EXPONENTIALAVERAGE*offset_ay+(1-EXPONENTIALAVERAGE)*measurements.accelerationy_mps2;
+  }
+  state.acc_x_mps2_e3 = int((measurements.accelerationx_mps2-offset_ax)*1e3);
+  state.acc_y_mps2_e3 = int((measurements.accelerationy_mps2-offset_ay)*1e3);
 //  state.acc_command_e3 = int(measurements.rcaccelerator*1e3);
 //  state.steer_command_e3 = int(measurements.rcsteering*1e3);
 }

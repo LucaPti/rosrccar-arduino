@@ -280,16 +280,12 @@ void loop() {
     #endif
 
     #if PUBLISH_VEHICLE_STATE
-//      estimator.state.acc_command_e3 = -42;
-//      estimator.state.steer_command_e3 = int(float(steeringoutput.read()-90)/180.0*1e3);
       estimator.update(measurements, desired_sample_time_microseconds);
       vehiclestate_publisher.publish( &estimator.state);
     #endif
 
     #if USE_RC_OUTPUT
-      if(measurements.rcaccelerator<-0.5) {
-        acceleratoroutput.write(90); // deactivate temporarily
-        steeringoutput.write(90);
+      if((vehiclecommand.operationmode_lon!=manual)&&(measurements.rcaccelerator<-0.5)) {
         vehiclecommand.operationmode_lon = off;
         vehiclecommand.operationmode_lat = off;
       }
