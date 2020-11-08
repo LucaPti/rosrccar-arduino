@@ -1,4 +1,4 @@
-#ifndef CUSTUMDATATYPES
+#ifndef CUSTOMDATATYPES
 #define CUSTOMDATATYPES
 
 struct VehicleState {
