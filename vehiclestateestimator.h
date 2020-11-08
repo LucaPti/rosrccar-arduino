@@ -27,31 +27,61 @@ static inline int8_t sgn(int val) {
  return 1;
 }
 
+enum ESCModes {
+  accelerate_forward=1,
+  brake_forward,
+  idle_forward,
+  idle_reverse,
+  brake_reverse,
+  accelerate_reverse
+};
+
+int esc_transitiontable[6][3] = {
+  2,3,1,
+  2,4,1,
+  2,3,1,
+  6,4,1,
+  5,3,5,
+  6,4,5
+};
+
+int esc_statemachine(int throttle_e3, int speed_mps_e3, int esc_state) {
+  int throttle_sign = 0;
+  if(!((abs(speed_mps_e3)<100)||(abs(throttle_e3)<100))) {
+    throttle_sign = throttle_e3>0 ? 1 : -1;
+  }
+  return esc_transitiontable[esc_state-1][throttle_sign+1];
+}
+
+int drivingdirection(int esc_state) {
+  return esc_state>3? -1 : 1;
+}
+
 class VehicleStateEstimator {
   public:
-    VehicleStateEstimator(){}
+    VehicleStateEstimator(): offset_ax(0), offset_ay(0), esc_state(idle_forward){}
     void update(VehicleMeasurement& measurements, unsigned int delta_time_microseconds);
     rosrccar_messages::VehicleState& getstate(){
       return state;
     }
     rosrccar_messages::VehicleState state;
   private:
-    float offset_ax
-    float offset_ay
+    float offset_ax;
+    float offset_ay;
+    int esc_state;
 };
 
 void VehicleStateEstimator::update(VehicleMeasurement& measurements, unsigned int delta_time_microseconds) {
   state.yawrate_radps_e3 = (measurements.yaw_rad*1e3-state.yaw_rad_e3)*50;//needs some investigation
   state.yaw_rad_e3 = int(measurements.yaw_rad*1e3);
   state.slipangle_rad_e3 = 0;
-  state.wheelspeed_mps_e3 = int(RATIO_SHAFT_SPEED*1e3*measurements.driveshaftspeed_radps);
+  esc_state = esc_statemachine(state.acc_command_e3, state.wheelspeed_mps_e3, esc_state);
+  state.wheelspeed_mps_e3 = int(RATIO_SHAFT_SPEED*1e3*measurements.driveshaftspeed_radps*drivingdirection(esc_state));
   if(state.wheelspeed_mps_e3==0) { // estimate offset when standing
     offset_ax = EXPONENTIALAVERAGE*offset_ax+(1-EXPONENTIALAVERAGE)*measurements.accelerationx_mps2;
     offset_ay = EXPONENTIALAVERAGE*offset_ay+(1-EXPONENTIALAVERAGE)*measurements.accelerationy_mps2;
   }
   state.acc_x_mps2_e3 = int((measurements.accelerationx_mps2-offset_ax)*1e3);
   state.acc_y_mps2_e3 = int((measurements.accelerationy_mps2-offset_ay)*1e3);
-//  state.acc_command_e3 = int(measurements.rcaccelerator*1e3);
-//  state.steer_command_e3 = int(measurements.rcsteering*1e3);
 }
 #endif
