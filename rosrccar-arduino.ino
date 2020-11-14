@@ -1,25 +1,25 @@
 // ############### Configuration
-#define DEBUG_MODE            0 // no ros communication just some debug prints via serial if set to 1
-#define USE_RC_INPUT          1
+#define DEBUG_MODE            1 // no ros communication just some debug prints via serial if set to 1
+#define USE_RC_INPUT          0
 #define PUBLISH_RC_INPUT      0
-#define USE_RC_OUTPUT         1
-#define USE_ENCODER_INPUT     1
+#define USE_RC_OUTPUT         0
+#define USE_ENCODER_INPUT     0
 #define USE_BATTERY_VOLTAGE   1
-#define PUBLISH_BATTERY_VOLTAGE 1
-#define USE_GYRO              1
+#define PUBLISH_BATTERY_VOLTAGE 0
+#define USE_GYRO              0
 #define PUBLISH_GYRO_INPUT    0
-#define PUBLISH_VEHICLE_STATE 1
+#define PUBLISH_VEHICLE_STATE 0
 #define PUBLISH_TIMING        0
-#define RECEIVE_ROS_COMMAND   1
+#define RECEIVE_ROS_COMMAND   0
 
 // ############### Pinout
-#define ACCELERATOR_INPUT_PIN 2 // RC receiver channel 2
-#define STEERING_INPUT_PIN    3 // RC receiver channel 1
-#define ACCELERATOR_OUTPUT_PIN 5// PWM for electronic speed controller
-#define STEERING_OUTPUT_PIN   6 // PWM for steering servo
-#define BUTTON_PIN            7 // For local input, e.g. shutting down the Pi or stopping/starting recording
-#define ENCODER_INPUT_PIN    14 // Pin change interrupt; A0
-#define BATTERY_VOLTAGE      16 // For reading 0.5*v_batt; A2
+#define ACCELERATOR_INPUT_PIN 13 // RC receiver channel 2
+#define STEERING_INPUT_PIN    14 // RC receiver channel 1
+#define ACCELERATOR_OUTPUT_PIN 15// PWM for electronic speed controller
+#define STEERING_OUTPUT_PIN   16 // PWM for steering servo
+#define BUTTON_PIN            20 // For local input, e.g. shutting down the Pi or stopping/starting recording
+#define ENCODER_INPUT_PIN    17 // Pin change interrupt; A0
+#define BATTERY_VOLTAGE      21 // For reading 0.5*v_batt; A2
 //      SDA                  18 // For gyro MPU6050
 //      SCL                  19 // For gyro MPU6050
 // Use additional step-down converter to power peripherals; ensure common ground between all devices and do not accidently short-circuit anything. ;-)
@@ -58,7 +58,9 @@
 #include <rosrccar_messages/VehicleCommand.h>
 #include "buttonstatemachine.h"
 
-#if !DEBUG_MODE // Normal "production mode" loop
+#if DEBUG_MODE
+unsigned int loopcounter(0);
+#endif
 // ############### Global variables & functions
 ros::NodeHandle node_handle;
 VehicleMeasurement measurements;
@@ -72,7 +74,9 @@ ButtonStateMachine button(BUTTON_PIN);
 #if PUBLISH_VEHICLE_STATE
   // rosrccar_messages::VehicleState vehiclestate_msg;
   VehicleStateEstimator estimator;
+  #if !DEBUG_MODE
   ros::Publisher vehiclestate_publisher("vehicle_state", &estimator.state);
+  #endif
 #endif
 #if USE_RC_INPUT
   RCReader acceleratorinput(ACCELERATOR_INPUT_PIN);
@@ -84,7 +88,7 @@ ButtonStateMachine button(BUTTON_PIN);
   void steeringinterrupt() {
     steeringinput.processinterrupt();
   }
-  #if PUBLISH_RC_INPUT
+  #if PUBLISH_RC_INPUT && !DEBUG_MODE
     rosrccar_messages::RCControl rc_msg;
     ros::Publisher rc_publisher("rc_input", &rc_msg);
   #endif
@@ -95,7 +99,7 @@ ButtonStateMachine button(BUTTON_PIN);
   Servo steeringoutput;
   CommandArbitrator arbitrator;
 #endif
-#if RECEIVE_ROS_COMMAND
+#if RECEIVE_ROS_COMMAND && !DEBUG_MODE
   void rosinterrupt(const rosrccar_messages::VehicleCommand ros_command_received) {
     vehiclecommand_ros = ros_command_received;
   }
@@ -111,20 +115,20 @@ ButtonStateMachine button(BUTTON_PIN);
   }
 #endif
 
-#if USE_BATTERY_VOLTAGE&&PUBLISH_BATTERY_VOLTAGE
+#if USE_BATTERY_VOLTAGE&&PUBLISH_BATTERY_VOLTAGE && !DEBUG_MODE
   std_msgs::UInt16 battery_msg;
   ros::Publisher battery_publisher("battery_voltage", &battery_msg);
 #endif
 
 #if USE_GYRO
   MPU6050Wrapper mpu;
-  #if PUBLISH_GYRO_INPUT
+  #if PUBLISH_GYRO_INPUT && !DEBUG_MODE
     geometry_msgs::Twist gyro_msg;
     ros::Publisher gyro_publisher("imu_sensor", &gyro_msg);
   #endif
 #endif
 
-#if PUBLISH_TIMING
+#if PUBLISH_TIMING && !DEBUG_MODE
   std_msgs::UInt16 timing_msg;
   ros::Publisher timing_publisher("cycle_time", &timing_msg);
 #endif
@@ -133,17 +137,19 @@ ButtonStateMachine button(BUTTON_PIN);
 void setup() {
   vehiclecommand.operationmode_lon = manual;
   vehiclecommand.operationmode_lat = manual;
+  #if  !DEBUG_MODE
   node_handle.getHardware()->setBaud(256000);
   node_handle.initNode();
+  #endif
   #if USE_RC_INPUT
     attachInterrupt(digitalPinToInterrupt(ACCELERATOR_INPUT_PIN), acceleratorinterrupt, CHANGE);
     attachInterrupt(digitalPinToInterrupt(STEERING_INPUT_PIN), steeringinterrupt, CHANGE);
-    #if PUBLISH_RC_INPUT
+    #if PUBLISH_RC_INPUT && !DEBUG_MODE
       node_handle.advertise(rc_publisher);
     #endif
   #endif
 
-  #if RECEIVE_ROS_COMMAND
+  #if RECEIVE_ROS_COMMAND && !DEBUG_MODE
     node_handle.subscribe(roscomand_subscriber);
   #endif
   
@@ -159,7 +165,7 @@ void setup() {
     sei();
   #endif
 
-  #if USE_BATTERY_VOLTAGE&&PUBLISH_BATTERY_VOLTAGE
+  #if USE_BATTERY_VOLTAGE&&PUBLISH_BATTERY_VOLTAGE && !DEBUG_MODE
     node_handle.advertise(battery_publisher);
   #endif
 
@@ -180,16 +186,16 @@ void setup() {
     mpu.setYAccelOffset(-430);//-50
     mpu.setZAccelOffset(968);//1060
     mpu.setDMPEnabled(true);
-    #if PUBLISH_GYRO_INPUT
+    #if PUBLISH_GYRO_INPUT && !DEBUG_MODE
       node_handle.advertise(gyro_publisher);
     #endif
   #endif
 
-  #if PUBLISH_VEHICLE_STATE
+  #if PUBLISH_VEHICLE_STATE && !DEBUG_MODE
     node_handle.advertise(vehiclestate_publisher);
   #endif
 
-  #if PUBLISH_TIMING
+  #if PUBLISH_TIMING && !DEBUG_MODE
     node_handle.advertise(timing_publisher);
   #endif
 }
@@ -202,23 +208,48 @@ void loop() {
     #if USE_RC_INPUT
       measurements.rcaccelerator = acceleratorinput.failsafeinput();
       measurements.rcsteering = steeringinput.failsafeinput();
-      #if PUBLISH_RC_INPUT
+      #if PUBLISH_RC_INPUT && !DEBUG_MODE
         rc_msg.accelerator = measurements.rcaccelerator;
         rc_msg.rcsteering = measurements.rcsteering;
         rc_msg.valid = acceleratorinput.signalisvalid()&&steeringinput.signalisvalid();
         rc_publisher.publish( &rc_msg );
       #endif
+      #if DEBUG_MODE
+        loopcounter = loopcounter+1;
+        if(loopcounter % 50 == 0) {
+          Serial.println("RC Car in Debug Mode");
+          Serial.print("RC Input\t ac: ");
+          Serial.print(acceleratorinput.failsafeinput());
+          Serial.print("\t st: ");
+          Serial.print(steeringinput.failsafeinput());
+          Serial.println(";");
+        }
+      #endif
     #endif
 
     #if USE_ENCODER_INPUT
       measurements.driveshaftspeed_radps = encoder.getangularspeed();
+      #if DEBUG_MODE
+        if(loopcounter % 50 == 0) {
+          Serial.print("Encoder:\t");
+          Serial.print(measurements.driveshaftspeed_radps);
+          Serial.println(";");
+        }
+      #endif
     #endif
     
     #if USE_BATTERY_VOLTAGE
       measurements.batteryvoltage_volt = VOLTAGE_CONVERSION*analogRead(BATTERY_VOLTAGE);
-      #if PUBLISH_BATTERY_VOLTAGE
+      #if PUBLISH_BATTERY_VOLTAGE && !DEBUG_MODE
         battery_msg.data = (unsigned int)(1e3*measurements.batteryvoltage_volt);
         battery_publisher.publish( &battery_msg );
+      #endif
+      #if DEBUG_MODE
+        if(loopcounter % 50 == 0) {
+          Serial.print("Battery:\t");
+          Serial.print(measurements.batteryvoltage_volt);
+          Serial.println(";");
+        }
       #endif
     #endif
 
@@ -227,7 +258,7 @@ void loop() {
       measurements.accelerationx_mps2 = mpu.aaReal.x*9.81/8196;
       measurements.accelerationy_mps2 = mpu.aaReal.y*9.81/8196;
       measurements.yaw_rad = mpu.ypr[0];
-      #if PUBLISH_GYRO_INPUT
+      #if PUBLISH_GYRO_INPUT && !DEBUG_MODE
         gyro_msg.linear.x = measurements.accelerationx_mps2;
         gyro_msg.linear.y = measurements.accelerationy_mps2;
         gyro_msg.linear.z = mpu.aaReal.z*9.81/8196;
@@ -236,11 +267,24 @@ void loop() {
         gyro_msg.angular.y = mpu.ypr[2];
         gyro_publisher.publish( &gyro_msg );
       #endif
+      #if DEBUG_MODE
+        if(loopcounter % 50 == 0) {
+          Serial.print("Gyro: x\t");
+          Serial.print(measurements.accelerationx_mps2);
+          Serial.print("\ty: ");
+          Serial.print(measurements.accelerationy_mps2);
+          Serial.print("\tyaw: ");
+          Serial.print(measurements.yaw_rad);
+          Serial.println(";");
+        }
+      #endif
     #endif
 
     #if PUBLISH_VEHICLE_STATE
       estimator.update(measurements, desired_sample_time_microseconds);
+      #if !DEBUG_MODE
       vehiclestate_publisher.publish( &estimator.state);
+      #endif
     #endif
 
     #if USE_RC_OUTPUT
@@ -255,6 +299,7 @@ void loop() {
       estimator.state.operationmode_lat = vehiclecommand.operationmode_lat;
     #endif
 
+    #if PUBLISH_VEHICLE_STATE
     if(button.update_status()!=0){
       if(button.current_status==1){
         estimator.state.operationmode_lat = pi_command_start_recording;
@@ -266,18 +311,31 @@ void loop() {
         estimator.state.operationmode_lat = pi_command_shutdown;
       }
     }
+    #if DEBUG_MODE
+      if(loopcounter % 50 == 0) {
+        Serial.print("Button:\t");
+        Serial.print(button.current_status);
+        Serial.println(";");
+      }
+    #endif
+    #endif
 
-    #if PUBLISH_TIMING
+    #if PUBLISH_TIMING && !DEBUG_MODE
       timing_msg.data = measurements.looptime_usec;
       timing_publisher.publish( &timing_msg );
     #endif
-    
+    #if !DEBUG_MODE
+      if(loopcounter % 50 == 0) {
+        Serial.print("Timing:\t");
+        Serial.print(measurements.looptime_usec);
+        Serial.println(";");
+      }
+    #endif
+
+    #if !DEBUG_MODE
     node_handle.spinOnce();
     measurements.looptime_usec = micros()-time_current_loop_microseconds;
+    #endif
     time_last_loop_microseconds = time_current_loop_microseconds;
   }
 }
-
-#else // DEBUG MODE, no ROS communication, just prints via serial #####################################################################################################################################
-
-#endif
