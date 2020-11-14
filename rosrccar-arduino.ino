@@ -140,6 +140,12 @@ void setup() {
   #if  !DEBUG_MODE
   node_handle.getHardware()->setBaud(256000);
   node_handle.initNode();
+  #else
+  Serial.begin(9600);
+  //delay(1000); // Otherwise the output from Teensy stops after a few lines.
+  while (!Serial) {
+    ; // wait for serial port to connect. Needed for native USB port only
+  }
   #endif
   #if USE_RC_INPUT
     attachInterrupt(digitalPinToInterrupt(ACCELERATOR_INPUT_PIN), acceleratorinterrupt, CHANGE);
