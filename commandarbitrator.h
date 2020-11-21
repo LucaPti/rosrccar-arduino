@@ -41,6 +41,7 @@ class CommandArbitrator {
           output.target_lat = roscommand.target_lat;
         }
       }
+      return output;
     }
 };
 

@@ -1,16 +1,16 @@
 // ############### Configuration
-#define DEBUG_MODE            1 // no ros communication just some debug prints via serial if set to 1
-#define USE_RC_INPUT          0
+#define DEBUG_MODE            0 // no ros communication just some debug prints via serial if set to 1
+#define USE_RC_INPUT          1
 #define PUBLISH_RC_INPUT      0
-#define USE_RC_OUTPUT         0
-#define USE_ENCODER_INPUT     0
+#define USE_RC_OUTPUT         1
+#define USE_ENCODER_INPUT     1
 #define USE_BATTERY_VOLTAGE   1
-#define PUBLISH_BATTERY_VOLTAGE 0
-#define USE_GYRO              0
+#define PUBLISH_BATTERY_VOLTAGE 1
+#define USE_GYRO              1
 #define PUBLISH_GYRO_INPUT    0
-#define PUBLISH_VEHICLE_STATE 0
-#define PUBLISH_TIMING        0
-#define RECEIVE_ROS_COMMAND   0
+#define PUBLISH_VEHICLE_STATE 1
+#define PUBLISH_TIMING        1
+#define RECEIVE_ROS_COMMAND   1
 
 // ############### Pinout
 #define ACCELERATOR_INPUT_PIN 13 // RC receiver channel 2
@@ -25,6 +25,7 @@
 // Use additional step-down converter to power peripherals; ensure common ground between all devices and do not accidently short-circuit anything. ;-)
 #define VOLTAGE_CONVERSION 0.0097969543147208 // Factor from analogRead to real battery voltage (measured through divider)
 #define TICKS_PER_REVOLUTION 4
+#define DEBUG_PRINT_MODULO 10
 
 // ############### Includes
 #include "ros.h"
@@ -100,7 +101,7 @@ ButtonStateMachine button(BUTTON_PIN);
   CommandArbitrator arbitrator;
 #endif
 #if RECEIVE_ROS_COMMAND && !DEBUG_MODE
-  void rosinterrupt(const rosrccar_messages::VehicleCommand ros_command_received) {
+  void rosinterrupt(const rosrccar_messages::VehicleCommand& ros_command_received) {
     vehiclecommand_ros = ros_command_received;
   }
 
@@ -109,8 +110,8 @@ ButtonStateMachine button(BUTTON_PIN);
 
 #if USE_ENCODER_INPUT
   EncoderReader encoder(ENCODER_INPUT_PIN, TICKS_PER_REVOLUTION);
-  ISR(PCINT1_vect)
-  {
+  
+  void encoderinterrupt() {
     encoder.processinterrupt();
   }
 #endif
@@ -135,8 +136,17 @@ ButtonStateMachine button(BUTTON_PIN);
 
 // ############### Setup
 void setup() {
+  pinMode(ACCELERATOR_INPUT_PIN, INPUT);
+  pinMode(STEERING_INPUT_PIN, INPUT);
+  pinMode(ACCELERATOR_OUTPUT_PIN, OUTPUT);
+  pinMode(STEERING_OUTPUT_PIN, OUTPUT);
+  pinMode(BUTTON_PIN, INPUT);
+  pinMode(ENCODER_INPUT_PIN, INPUT);
+  pinMode(BATTERY_VOLTAGE, INPUT);
   vehiclecommand.operationmode_lon = manual;
   vehiclecommand.operationmode_lat = manual;
+  vehiclecommand_ros.operationmode_lon = manual;
+  vehiclecommand_ros.operationmode_lat = manual;
   #if  !DEBUG_MODE
   node_handle.getHardware()->setBaud(256000);
   node_handle.initNode();
@@ -165,10 +175,7 @@ void setup() {
   #endif
 
   #if USE_ENCODER_INPUT
-    cli();
-    PCICR |= 0b00000010; // Enables Port C (PCIE1) Pin Change Interrupts
-    PCMSK1 |= 0b00000001; // PCINT11 bzw. A3 aktiv, Pins A5-A0
-    sei();
+    attachInterrupt(digitalPinToInterrupt(ENCODER_INPUT_PIN), encoderinterrupt, CHANGE);
   #endif
 
   #if USE_BATTERY_VOLTAGE&&PUBLISH_BATTERY_VOLTAGE && !DEBUG_MODE
@@ -210,7 +217,9 @@ void setup() {
 void loop() {
   time_current_loop_microseconds = micros();
   if(time_current_loop_microseconds >= time_last_loop_microseconds+desired_sample_time_microseconds) {
-    
+    #if DEBUG_MODE
+        loopcounter = loopcounter+1;
+    #endif
     #if USE_RC_INPUT
       measurements.rcaccelerator = acceleratorinput.failsafeinput();
       measurements.rcsteering = steeringinput.failsafeinput();
@@ -221,9 +230,7 @@ void loop() {
         rc_publisher.publish( &rc_msg );
       #endif
       #if DEBUG_MODE
-        loopcounter = loopcounter+1;
-        if(loopcounter % 50 == 0) {
-          Serial.println("RC Car in Debug Mode");
+        if(loopcounter % DEBUG_PRINT_MODULO == 0) {
           Serial.print("RC Input\t ac: ");
           Serial.print(acceleratorinput.failsafeinput());
           Serial.print("\t st: ");
@@ -236,7 +243,7 @@ void loop() {
     #if USE_ENCODER_INPUT
       measurements.driveshaftspeed_radps = encoder.getangularspeed();
       #if DEBUG_MODE
-        if(loopcounter % 50 == 0) {
+        if(loopcounter % DEBUG_PRINT_MODULO == 0) {
           Serial.print("Encoder:\t");
           Serial.print(measurements.driveshaftspeed_radps);
           Serial.println(";");
@@ -251,7 +258,7 @@ void loop() {
         battery_publisher.publish( &battery_msg );
       #endif
       #if DEBUG_MODE
-        if(loopcounter % 50 == 0) {
+        if(loopcounter % DEBUG_PRINT_MODULO == 0) {
           Serial.print("Battery:\t");
           Serial.print(measurements.batteryvoltage_volt);
           Serial.println(";");
@@ -274,7 +281,7 @@ void loop() {
         gyro_publisher.publish( &gyro_msg );
       #endif
       #if DEBUG_MODE
-        if(loopcounter % 50 == 0) {
+        if(loopcounter % DEBUG_PRINT_MODULO == 0) {
           Serial.print("Gyro: x\t");
           Serial.print(measurements.accelerationx_mps2);
           Serial.print("\ty: ");
@@ -299,10 +306,13 @@ void loop() {
       vehiclecommand = arbitrator.arbitrate(vehiclecommand, vehiclecommand_ros);
       steeringoutput.write(float(vehiclecommand.target_lat)/2e3*90+90);
       acceleratoroutput.write(float(vehiclecommand.target_lon)/2e3*90+90);
+      //steeringoutput.write(110);
+      #if PUBLISH_VEHICLE_STATE
       estimator.state.steer_command_e3 = vehiclecommand.target_lat;
       estimator.state.acc_command_e3 = vehiclecommand.target_lon;
       estimator.state.operationmode_lon = vehiclecommand.operationmode_lon;
       estimator.state.operationmode_lat = vehiclecommand.operationmode_lat;
+      #endif
     #endif
 
     #if PUBLISH_VEHICLE_STATE
@@ -318,7 +328,7 @@ void loop() {
       }
     }
     #if DEBUG_MODE
-      if(loopcounter % 50 == 0) {
+      if(loopcounter % DEBUG_PRINT_MODULO == 0) {
         Serial.print("Button:\t");
         Serial.print(button.current_status);
         Serial.println(";");
@@ -330,8 +340,8 @@ void loop() {
       timing_msg.data = measurements.looptime_usec;
       timing_publisher.publish( &timing_msg );
     #endif
-    #if !DEBUG_MODE
-      if(loopcounter % 50 == 0) {
+    #if DEBUG_MODE
+      if(loopcounter % DEBUG_PRINT_MODULO == 0) {
         Serial.print("Timing:\t");
         Serial.print(measurements.looptime_usec);
         Serial.println(";");

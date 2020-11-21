@@ -14,8 +14,14 @@ class EncoderReader : public PWMReader {
 };
 
 float EncoderReader::getangularspeed() {
-  if((micros()-phase_start_time)>MICROS_STANDSTILL||(pwm_interval==0)||(pwm_interval>MICROS_STANDSTILL)) {
-    return 0;
+  unsigned long incomplete_pwm_interval = (micros()-phase_start_time);
+  if((incomplete_pwm_interval>pwm_interval)||(incomplete_pwm_interval>MICROS_STANDSTILL)){
+    if(incomplete_pwm_interval>MICROS_STANDSTILL) {
+      return 0;
+    }
+    else {
+      return TWO_PI/(incomplete_pwm_interval*ticks_per_revolution_times_usec_to_sec);
+    }
   }
   else {
     return TWO_PI/(pwm_interval*ticks_per_revolution_times_usec_to_sec);
